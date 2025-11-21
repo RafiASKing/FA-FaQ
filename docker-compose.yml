@@ -1,0 +1,18 @@
+version: '3'
+services:
+  # Service Aplikasi Utama
+  faq-app:
+    build: .
+    container_name: faq_emr_app
+    restart: always
+    ports:
+      - "8501:8501" # Port Luar : Port Dalam
+    volumes:
+      # PENTING: Ini agar Data & Gambar TIDAK HILANG saat deploy ulang
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./.streamlit:/app/.streamlit # Biar config toml terbaca
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY} # Nanti set di server
+
+  # (Opsional) Nanti kalau mau tambah FastAPI untuk WA Bot, tambah di sini

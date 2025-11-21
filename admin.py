@@ -7,7 +7,7 @@ from src import database, utils
 if 'auth' not in st.session_state: st.session_state.auth = False
 
 def login():
-    if st.session_state.pass_input == "admin123": # Ganti password
+    if st.session_state.pass_input == "veven": 
         st.session_state.auth = True
     else:
         st.error("Password salah")
@@ -20,91 +20,127 @@ if not st.session_state.auth:
 # --- MAIN UI ---
 st.title("🛠️ Admin Console")
 
-# Load Tags Mapping
 tags_map = utils.load_tags_config()
 
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Data List", "➕ Tambah", "✏️ Edit/Hapus", "⚙️ Config Tags"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Data List", "➕ Tambah (Auto-Clear)", "✏️ Edit/Hapus", "⚙️ Config Tags"])
 
-# === TAB 1: LIST ===
+# === TAB 1: LIST (FIX WARNING & NEW COLUMNS) ===
 with tab1:
+    st.caption("Menampilkan database lengkap termasuk 'Hidden Context' yang dibaca AI.")
     df = database.get_all_data_as_df()
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-# === TAB 2: TAMBAH DATA ===
-with tab2:
-    col_id, col_modul = st.columns([1, 3])
-    with col_id:
-        # Auto ID Safe
-        coll = database.get_collection()
-        next_id = utils.get_next_id_safe(coll)
-        st.text_input("ID (Auto)", value=next_id, disabled=True)
-    with col_modul:
-        i_tag = st.selectbox("Modul", list(tags_map.keys()))
-        
-    i_judul = st.text_input("Judul Pertanyaan")
-    i_jawab = st.text_area("Jawaban", height=150)
-    i_key = st.text_input("Keyword Tambahan")
-    i_src = st.text_input("Source URL")
-    i_imgs = st.file_uploader("Gambar", accept_multiple_files=True)
     
-    if st.button("💾 SIMPAN DATA", type="primary"):
-        with st.spinner("Menyimpan..."):
-            paths = utils.save_uploaded_images(i_imgs, i_judul, i_tag)
-            database.upsert_faq(next_id, i_tag, i_judul, i_jawab, i_key, paths, i_src)
-            st.toast("Data tersimpan!", icon="✅")
-            time.sleep(1)
-            st.rerun()
+
+    # ATAU: Jika versi streamlit kamu minta 'width', gunakan parameter column_config agar rapi
+    st.dataframe(
+        df, 
+        hide_index=True,
+        width="stretch"
+    )
+
+# === TAB 2: TAMBAH DATA (DENGAN FITUR AUTO-CLEAR) ===
+with tab2:
+    st.info("Form ini akan otomatis reset setelah tombol Simpan ditekan.")
+    
+    # Hitung ID di luar form agar user tau ID nya
+    coll = database.get_collection()
+    next_id = utils.get_next_id_safe(coll)
+    st.markdown(f"**Next ID:** `{next_id}`")
+
+    # --- FORM START ---
+    # clear_on_submit=True adalah kuncinya!
+    with st.form("form_tambah_data", clear_on_submit=True):
+        col_modul, col_judul = st.columns([1, 3])
+        
+        with col_modul:
+            i_tag = st.selectbox("Modul", list(tags_map.keys()))
+        with col_judul:
+            i_judul = st.text_input("Judul Pertanyaan")
+            
+        i_jawab = st.text_area("Jawaban", height=150)
+        i_key = st.text_input("Keyword Tambahan")
+        i_src = st.text_input("Source URL")
+        i_imgs = st.file_uploader("Gambar", accept_multiple_files=True)
+        
+        # Tombol Submit ada di dalam Form
+        submitted = st.form_submit_button("💾 SIMPAN DATA", type="primary")
+        
+        if submitted:
+            if not i_judul or not i_jawab:
+                st.error("Judul dan Jawaban wajib diisi!")
+            else:
+                with st.spinner("Sedang menyimpan & reset form..."):
+                    # 1. Save Image
+                    paths = utils.save_uploaded_images(i_imgs, i_judul, i_tag)
+                    
+                    # 2. Upsert to Chroma (Pake ID yang dihitung di awal)
+                    database.upsert_faq(next_id, i_tag, i_judul, i_jawab, i_key, paths, i_src)
+                    
+                    # 3. Notifikasi
+                    st.toast(f"✅ Data ID {next_id} Tersimpan! Form telah di-reset.")
+                    
+                    # Gak perlu st.rerun() kalau pakai clear_on_submit, inputan otomatis hilang.
+                    # Tapi kalau mau update tabel ID next secara real-time, kasih sleep dikit lalu rerun.
+                    time.sleep(1)
+                    st.rerun()
 
 # === TAB 3: EDIT/HAPUS ===
 with tab3:
     df = database.get_all_data_as_df()
     if not df.empty:
         opts = [f"{r['ID']} | {r['Judul']}" for _, r in df.iterrows()]
-        sel = st.selectbox("Pilih Data", opts)
+        sel = st.selectbox("Pilih Data untuk Edit", opts)
         sel_id = sel.split(" | ")[0]
         
-        # Get Current Data
         row = df[df['ID'] == sel_id].iloc[0]
         
         with st.form("edit_form"):
-            e_tag = st.selectbox("Modul", list(tags_map.keys()), index=list(tags_map.keys()).index(row['Tag']) if row['Tag'] in tags_map else 0)
+            st.caption(f"Editing ID: {sel_id}")
+            
+            # Handle Index Error kalau tag lama udah dihapus dari config
+            curr_tag = row['Tag']
+            idx_tag = 0
+            if curr_tag in tags_map:
+                idx_tag = list(tags_map.keys()).index(curr_tag)
+            
+            e_tag = st.selectbox("Modul", list(tags_map.keys()), index=idx_tag)
             e_judul = st.text_input("Judul", value=row['Judul'])
             e_jawab = st.text_area("Jawaban", value=row['Jawaban'])
             e_key = st.text_input("Keyword", value=row['Keyword'])
             e_src = st.text_input("URL", value=row['Source'])
             
-            st.caption(f"Gambar saat ini: {row['Gambar']}")
-            e_imgs = st.file_uploader("Ganti Gambar (Overwrite)", accept_multiple_files=True)
+            st.markdown(f"**Gambar saat ini:** `{row['Gambar']}`")
+            e_imgs = st.file_uploader("Upload Gambar Baru (Akan menimpa gambar lama)", accept_multiple_files=True)
             
             c1, c2 = st.columns(2)
-            if c1.form_submit_button("Update"):
+            if c1.form_submit_button("💾 Update Perubahan"):
                 final_path = row['Gambar']
                 if e_imgs:
                     final_path = utils.save_uploaded_images(e_imgs, e_judul, e_tag)
+                
                 database.upsert_faq(sel_id, e_tag, e_judul, e_jawab, e_key, final_path, e_src)
-                st.success("Updated!")
+                st.toast("Update Berhasil!", icon="✅")
+                time.sleep(1)
                 st.rerun()
                 
-            if c2.form_submit_button("Hapus Data", type="primary"):
+            if c2.form_submit_button("🗑️ Hapus Data Ini", type="primary"):
                 database.delete_faq(sel_id)
-                st.warning("Deleted.")
+                st.toast("Data dihapus.", icon="🗑️")
+                time.sleep(1)
                 st.rerun()
 
 # === TAB 4: CONFIG TAGS ===
 with tab4:
     st.header("🎨 Atur Kategori & Warna")
-    
-    # Editor Table
     current_df = pd.DataFrame(list(tags_map.items()), columns=["Tag", "Hex Color"])
-    st.dataframe(current_df, use_container_width=True)
+    st.dataframe(current_df, width="stretch") # Sesuaikan warning disini juga
     
-    c_new_name = st.text_input("Nama Tag Baru/Edit")
-    c_new_col = st.color_picker("Warna Badge")
-    
-    if st.button("Simpan Tag"):
-        tags_map[c_new_name] = c_new_col
-        utils.save_tags_config(tags_map)
-        st.rerun()
+    with st.form("tag_form", clear_on_submit=True):
+        c_new_name = st.text_input("Nama Tag Baru/Edit")
+        c_new_col = st.color_picker("Warna Badge")
+        if st.form_submit_button("Simpan Tag"):
+            tags_map[c_new_name] = c_new_col
+            utils.save_tags_config(tags_map)
+            st.rerun()
         
     st.divider()
     del_tag = st.selectbox("Hapus Tag", list(tags_map.keys()))

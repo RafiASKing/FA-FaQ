@@ -68,7 +68,7 @@ for item in results:
             for img_path in img_list:
                 real_path = utils.fix_image_path_for_ui(img_path)
                 if real_path and os.path.exists(real_path):
-                    st.image(real_path, use_container_width=True)
+                    st.image(real_path, width='stretch')
         
         # Source Link
         url = item.get('sumber_url', '')

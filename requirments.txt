@@ -1,0 +1,4 @@
+streamlit
+chromadb
+pandas
+google-genai

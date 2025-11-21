@@ -5,7 +5,6 @@ from google.genai import types
 from .config import GOOGLE_API_KEY, DB_PATH, COLLECTION_NAME
 
 # --- SETUP CLIENTS ---
-# Pakai check_api_heartbeat() nanti kalau mau production
 client_ai = genai.Client(api_key=GOOGLE_API_KEY)
 client_db = chromadb.PersistentClient(path=DB_PATH)
 
@@ -20,19 +19,19 @@ def generate_embedding(text):
     )
     return response.embeddings[0].values
 
+# --- LOGIKA CONTEXT BARU (Dari Request Kamu) ---
 def build_context_text(judul, jawaban, keyword, tag):
-    # 1. Definisikan "Kamus Pintar" Konteks Tambahan
-    # Tujuannya: Menangkap sinonim yang sering dipakai orang RS tapi beda istilah sistem
+
     context_map = {
-        "IPD": "Rawat Inap, In-Patient Department, Bangsal, Opname, Ranap, Kamar Perawatan",
-        "OPD": "Rawat Jalan, Poliklinik, Out-Patient, Rajal, Konsultasi Dokter, Kontrol",
-        "ED": "Emergency, IGD, UGD, Gawat Darurat, Accident & Emergency, Triage, Resusitasi",
-        "MR": "Medical Record, Rekam Medis, Filling, Coding, Casemix, Resume Medis",
-        "Rehab": "Fisioterapi, Terapi, Rehabilitasi Medik, Rehab Medik"
+        "IPD": "Rawat Inap, Bangsal",
+        "OPD": "Rawat Jalan, Poli",
+        "ED": "IGD, Emergency",
+        "MR": "Medical Record",
+        "Rehab": "Fisioterapi, Rehab Medik",
     }
-    
+ 
     extra_context = context_map.get(tag, "")
-    
+ 
     return f"""Modul Sistem: {tag}
 Sinonim/Konteks tambahan: {extra_context}
 
@@ -45,13 +44,11 @@ Solusi/Langkah-langkah:
 Keyword Tambahan (Slang/Error Code):
 {keyword}"""
 
-
 # --- CORE FEATURES ---
 
 def search_faq(query_text, filter_tag=None, n_results=3):
     collection = get_collection()
     
-    # 1. Embed Query
     resp = client_ai.models.embed_content(
         model="models/gemini-embedding-001",
         contents=query_text,
@@ -59,10 +56,8 @@ def search_faq(query_text, filter_tag=None, n_results=3):
     )
     q_vec = resp.embeddings[0].values
     
-    # 2. Define Filter (Pre-Filtering)
     where_clause = {"tag": filter_tag} if (filter_tag and filter_tag != "Semua Modul") else None
     
-    # 3. Query Chroma
     results = collection.query(
         query_embeddings=[q_vec],
         n_results=n_results,
@@ -70,14 +65,33 @@ def search_faq(query_text, filter_tag=None, n_results=3):
     )
     return results
 
+# --- UPDATE: MENAMPILKAN CONTEXT & EMBEDDING ---
 def get_all_data_as_df():
     collection = get_collection()
-    data = collection.get(include=['metadatas', 'documents'])
+    data = collection.get(include=['metadatas', 'documents', 'embeddings'])
+    
     if not data['ids']: return pd.DataFrame()
     
     rows = []
+    # Ambil list embeddings ke variabel dulu biar aman
+    all_embeddings = data.get('embeddings') 
+    
     for i, doc_id in enumerate(data['ids']):
         meta = data['metadatas'][i]
+        
+        # Ambil Context
+        context_full = data['documents'][i] if data['documents'] else ""
+        
+        # --- PERBAIKAN ERROR VALUE ERROR DI SINI ---
+        # Cek pakai len() agar aman untuk NumPy Array maupun List
+        embed_vec = []
+        if all_embeddings is not None and len(all_embeddings) > 0:
+            embed_vec = all_embeddings[i]
+            
+        # Preview 5 angka pertama
+        embed_preview = str(embed_vec[:5]) + "..." if len(embed_vec) > 0 else "[]"
+        # -------------------------------------------
+
         rows.append({
             "ID": doc_id,
             "Tag": meta.get('tag', '-'),
@@ -85,17 +99,20 @@ def get_all_data_as_df():
             "Jawaban": meta.get('jawaban_tampil', ''),
             "Keyword": meta.get('keywords_raw', ''),
             "Gambar": meta.get('path_gambar', 'none'),
-            "Source": meta.get('sumber_url', '')
+            "Source": meta.get('sumber_url', ''),
+            "AI Context": context_full,
+            "Embed Vector": embed_preview
         })
     
     df = pd.DataFrame(rows)
-    # Sort numeric ID
     df['ID_Num'] = pd.to_numeric(df['ID'], errors='coerce')
     df = df.sort_values('ID_Num', ascending=False).drop(columns=['ID_Num'])
     return df
 
+
 def upsert_faq(doc_id, tag, judul, jawaban, keyword, img_paths, src_url):
     collection = get_collection()
+    # Panggil logic combiner baru
     text_embed = build_context_text(judul, jawaban, keyword, tag)
     vector = generate_embedding(text_embed)
     
