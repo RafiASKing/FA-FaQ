@@ -68,21 +68,23 @@ with tab2:
             if not i_judul or not i_jawab:
                 st.error("Judul dan Jawaban wajib diisi!")
             else:
-                with st.spinner("Sedang menyimpan & reset form..."):
-                    # 1. Hitung ID lagi TEPAT sebelum simpan (Real-time check)
-                    #    Jangan pakai variable 'next_id' yang dihitung pas awal halaman dibuka
-                    real_coll = database.get_collection()
-                    safe_id_now = utils.get_next_id_safe(real_coll)
-                    
-                    # 2. Save Image
-                    paths = utils.save_uploaded_images(i_imgs, i_judul, i_tag)
-                    
-                    # 3. Upsert pakai SAFE ID yang baru
-                    database.upsert_faq(safe_id_now, i_tag, i_judul, i_jawab, i_key, paths, i_src)
-                    
-                    st.toast(f"✅ Data ID {safe_id_now} Tersimpan! Form di-reset.")
-                    time.sleep(1)
-                    st.rerun()
+                try:
+                    with st.spinner("Sedang menyimpan & reset form..."):
+                        # 1. Hitung ID lagi TEPAT sebelum simpan (Real-time check)
+                        real_coll = database.get_collection()
+                        safe_id_now = utils.get_next_id_safe(real_coll)
+                        
+                        # 2. Save Image
+                        paths = utils.save_uploaded_images(i_imgs, i_judul, i_tag)
+                        
+                        # 3. Upsert pakai SAFE ID yang baru
+                        database.upsert_faq(safe_id_now, i_tag, i_judul, i_jawab, i_key, paths, i_src)
+                        
+                        st.toast(f"✅ Data ID {safe_id_now} Tersimpan! Form di-reset.")
+                        time.sleep(1)
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal menyimpan data: {e}")
 
 # === TAB 3: EDIT/HAPUS ===
 with tab3:
