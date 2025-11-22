@@ -69,17 +69,18 @@ with tab2:
                 st.error("Judul dan Jawaban wajib diisi!")
             else:
                 with st.spinner("Sedang menyimpan & reset form..."):
-                    # 1. Save Image
+                    # 1. Hitung ID lagi TEPAT sebelum simpan (Real-time check)
+                    #    Jangan pakai variable 'next_id' yang dihitung pas awal halaman dibuka
+                    real_coll = database.get_collection()
+                    safe_id_now = utils.get_next_id_safe(real_coll)
+                    
+                    # 2. Save Image
                     paths = utils.save_uploaded_images(i_imgs, i_judul, i_tag)
                     
-                    # 2. Upsert to Chroma (Pake ID yang dihitung di awal)
-                    database.upsert_faq(next_id, i_tag, i_judul, i_jawab, i_key, paths, i_src)
+                    # 3. Upsert pakai SAFE ID yang baru
+                    database.upsert_faq(safe_id_now, i_tag, i_judul, i_jawab, i_key, paths, i_src)
                     
-                    # 3. Notifikasi
-                    st.toast(f"✅ Data ID {next_id} Tersimpan! Form telah di-reset.")
-                    
-                    # Gak perlu st.rerun() kalau pakai clear_on_submit, inputan otomatis hilang.
-                    # Tapi kalau mau update tabel ID next secara real-time, kasih sleep dikit lalu rerun.
+                    st.toast(f"✅ Data ID {safe_id_now} Tersimpan! Form di-reset.")
                     time.sleep(1)
                     st.rerun()
 
