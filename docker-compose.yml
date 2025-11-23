@@ -1,18 +1,34 @@
 version: '3'
+
 services:
-  # Service Aplikasi Utama
-  faq-app:
+  # --- SERVICE 1: USER APP (Port 8501) ---
+  faq-user:
     build: .
-    container_name: faq_emr_app
+    container_name: faq_user_app
     restart: always
     ports:
-      - "8501:8501" # Port Luar : Port Dalam
+      - "8501:8501"
     volumes:
-      # PENTING: Ini agar Data & Gambar TIDAK HILANG saat deploy ulang
-      - ./data:/app/data
-      - ./images:/app/images
-      - ./.streamlit:/app/.streamlit # Biar config toml terbaca
-    environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY} # Nanti set di server
+      - ./data:/app/data             # Database Shared (Laptop <-> Docker)
+      - ./images:/app/images         # Gambar Shared
+      - ./.streamlit:/app/.streamlit # Config Tema
+    env_file:
+      - .env                         # Baca API Key dari file .env
+    # Perintah khusus jalankan User App
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
-  # (Opsional) Nanti kalau mau tambah FastAPI untuk WA Bot, tambah di sini
+  # --- SERVICE 2: ADMIN APP (Port 8502) ---
+  faq-admin:
+    build: .
+    container_name: faq_admin_app
+    restart: always
+    ports:
+      - "8502:8502"                  # Buka Pintu Belakang buat Admin
+    volumes:
+      - ./data:/app/data             # WAJIB SAMA agar Database Sinkron
+      - ./images:/app/images         # WAJIB SAMA agar Gambar Sinkron
+      - ./.streamlit:/app/.streamlit
+    env_file:
+      - .env
+    # Perintah khusus jalankan Admin Console
+    command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0

@@ -3,28 +3,30 @@ import json
 import re
 import random
 import string
+import time
 from .config import TAGS_FILE, IMAGES_DIR
 
-# --- DAFTAR WARNA RESMI STREAMLIT (Palette Restricted) ---
-# Format: "Label Dropdown": {"hex": "#HEXCODE", "name": "nama_streamlit"}
+# --- DAFTAR WARNA RESMI STREAMLIT (Restricted Palette) ---
+# Admin hanya boleh memilih warna ini agar badge di UI User valid
 COLOR_PALETTE = {
-    "Merah (Emergency/ED/HR)": {"hex": "#FF4B4B", "name": "red"},
-    "Hijau (OPD/Poli/BPJS)":   {"hex": "#2ECC71", "name": "green"},
-    "Biru (IPD/Ranap/MR)":     {"hex": "#3498DB", "name": "blue"},
-    "Orange (Cashier/Radio)":  {"hex": "#FFA500", "name": "orange"},
-    "Ungu (Mungkin Farmasi)":  {"hex": "#9B59B6", "name": "violet"},
-    "Abu-abu (IT/Umum)":       {"hex": "#808080", "name": "gray"},
-    "Pelangi (Special)":       {"hex": "#333333", "name": "rainbow"}
+    "Merah":            {"hex": "#FF4B4B", "name": "red"},
+    "Hijau":            {"hex": "#2ECC71", "name": "green"},
+    "Biru":             {"hex": "#3498DB", "name": "blue"},
+    "Orange":           {"hex": "#FFA500", "name": "orange"},
+    "Ungu":             {"hex": "#9B59B6", "name": "violet"},
+    "Abu-abu":          {"hex": "#808080", "name": "gray"},
+    "Pelangi (Special)":{"hex": "#333333", "name": "rainbow"}
 }
 
 # --- 1. JSON TAG CONFIG ---
 def load_tags_config():
     if not os.path.exists(TAGS_FILE):
-        # Default struktur baru
+        # Default struktur (Nested Dict)
         default_tags = {
-            "ED": {"color": "#FF4B4B", "desc": "IGD, Emergency, Triage"},
-            "OPD": {"color": "#2ECC71", "desc": "Rawat Jalan, Poli, Dokter"},
-            "IPD": {"color": "#3498DB", "desc": "Rawat Inap, Bangsal, Bed"}
+            "ED": {"color": "#FF4B4B", "desc": "IGD, Emergency, Triage, Ambulans"},
+            "OPD": {"color": "#2ECC71", "desc": "Rawat Jalan, Poli, Dokter Spesialis"},
+            "IPD": {"color": "#3498DB", "desc": "Rawat Inap, Bangsal, Bed, Visite"},
+            "Umum": {"color": "#808080", "desc": "General Info, IT Support"}
         }
         save_tags_config(default_tags)
         return default_tags
@@ -51,11 +53,11 @@ def get_next_id_safe(collection):
         if not numeric_ids: return "1"
         return str(max(numeric_ids) + 1)
     except Exception:
-        import time
         return str(int(time.time()))
 
 # --- 3. IMAGE HANDLING ---
 def sanitize_filename(text):
+    # Membersihkan nama file dari karakter aneh
     return re.sub(r'[^\w\-_]', '', text.replace(" ", "_"))[:30]
 
 def save_uploaded_images(uploaded_files, judul, tag):
@@ -68,6 +70,7 @@ def save_uploaded_images(uploaded_files, judul, tag):
     
     for i, file in enumerate(uploaded_files):
         ext = file.name.split('.')[-1]
+        # Tambah random suffix biar gak bentrok
         suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
         
         filename = f"{clean_judul}_{tag}_{i+1}_{suffix}.{ext}"
@@ -76,6 +79,7 @@ def save_uploaded_images(uploaded_files, judul, tag):
         with open(full_path, "wb") as f:
             f.write(file.getbuffer())
             
+        # Simpan relative path agar portable (Docker/Local)
         rel_path = f"./images/{tag}/{filename}"
         saved_paths.append(rel_path)
         
@@ -88,3 +92,16 @@ def fix_image_path_for_ui(db_path):
     if clean.startswith("./"):
         return clean 
     return clean
+
+# --- 4. TEXT CLEANING FOR AI ---
+def clean_text_for_embedding(text):
+    """
+    Menghapus tag [GAMBAR X] agar tidak menjadi noise bagi AI.
+    Tapi MEMPERTAHANKAN markdown seperti **bold** atau list.
+    Contoh: "Klik [GAMBAR 1] tombol save" -> "Klik tombol save"
+    """
+    if not text: return ""
+    # Hapus pattern [GAMBAR angka] case insensitive
+    clean = re.sub(r'\[GAMBAR\s*\d+\]', '', text, flags=re.IGNORECASE)
+    # Hapus whitespace berlebih akibat penghapusan tadi
+    return " ".join(clean.split())
