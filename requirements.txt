@@ -2,4 +2,4 @@ streamlit
 chromadb
 pandas
 google-genai
-pysqlite3-binary
+pysqlite3-binary; sys_platform == 'linux'
