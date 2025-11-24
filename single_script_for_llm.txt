@@ -109,13 +109,11 @@ with tab2:
         # Row 3: Meta Info & Upload
         c_k, c_s = st.columns(2)
         with c_k: 
-            # === UPDATE: REBRANDING UI HYDE ===
             st.markdown("Populasi Keyword / Bahasa User (HyDE) 👇")
             i_key = st.text_input("Hidden Label", value=default_key, key="in_k", 
                                   placeholder="Contoh: Gagal login, User not found, Tombol mati...",
                                   label_visibility="collapsed",
-                                  help="Masukkan kata-kata yang mungkin diketik user saat panik (Slang/Short).")
-            # ==================================
+                                  help="Masukkan kata-kata yang mungkin diketik user saat panik.")
             
         with c_s: 
             st.markdown("URL Sumber (Opsional)")
@@ -227,11 +225,7 @@ with tab3:
                 
                 e_jud = st.text_input("Judul SOP", value=row['Judul'])
                 e_jaw = st.text_area("Jawaban (Gunakan [GAMBAR X])", value=row['Jawaban'], height=200)
-                
-                # UPDATE UI DI SINI JUGA
-                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], 
-                                      help="Isi dengan variasi pertanyaan user.")
-                
+                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], help="Isi dengan variasi pertanyaan user.")
                 e_src = st.text_input("Source URL", value=row['Source'])
                 
                 st.markdown(f"**Path Gambar Saat Ini:** `{row['Gambar']}`")
@@ -316,7 +310,6 @@ st.set_option('deprecation.showfileUploaderEncoding', False)
 warnings.filterwarnings("ignore")
 
 # Load Konfigurasi Tag dari JSON (Single Source of Truth)
-# Agar warna sinkron dengan Admin Console
 TAGS_MAP = utils.load_tags_config()
 
 # CSS Styling
@@ -517,7 +510,7 @@ else:
     st.markdown(f"**Menampilkan {start_idx+1}-{min(end_idx, total_docs)} dari {total_docs} data**")
     
     for item in page_data:
-        # 1. Badge Warna (DINAMIS DARI CONFIG JSON)
+        # 1. Badge Warna
         tag = item.get('tag', 'Umum')
         badge_color = get_badge_color_name(tag)
         
@@ -543,11 +536,150 @@ else:
         with c1:
             if st.session_state.page > 0:
                 if st.button("⬅️ Sebelumnya"):
-                    st.session_state.page -= 1; st.rerun()
+                    st.session_state.page -= 1
+                    st.rerun()
         with c3:
             if st.session_state.page < total_pages - 1:
                 if st.button("Berikutnya ➡️"):
-                    st.session_state.page += 1; st.rerun()
+                    st.session_state.page += 1
+                    st.rerun()
+
+======== FILE: .\bot_wa.py ========
+import os
+import requests
+import uvicorn
+from fastapi import FastAPI, Request, BackgroundTasks
+from dotenv import load_dotenv
+from src import database, config
+
+# Load Environment Variables
+load_dotenv()
+
+app = FastAPI()
+
+# --- CONFIG ---
+FONNTE_TOKEN = os.getenv("FONNTE_TOKEN")
+# Ambil nomor bot sendiri dari config/env untuk logic group mention
+# Jika tidak diset, default kosong (hati-hati logic group mungkin kurang akurat)
+MY_BOT_NUMBER = os.getenv("BOT_NUMBER", "") 
+
+if not FONNTE_TOKEN:
+    print("⚠️ WARNING: FONNTE_TOKEN belum diisi di .env!")
+
+def send_wa_reply(target, message):
+    """Kirim pesan balasan via Fonnte API"""
+    headers = {
+        "Authorization": FONNTE_TOKEN,
+    }
+    # Fonnte support text markdown (Bold, Italic)
+    data = {
+        "target": target,
+        "message": message,
+    }
+
+    try:
+        url = "https://api.fonnte.com/send"
+        resp = requests.post(url, headers=headers, data=data)
+        print(f"✅ [Fonnte] Reply sent to {target} | Status: {resp.status_code}")
+    except Exception as e:
+        print(f"❌ [Fonnte] Error sending message: {e}")
+
+def process_logic(sender, incoming_msg):
+    """
+    Otak Bot:
+    1. Filter Group vs Private
+    2. Search Database
+    3. Generate Reply
+    """
+    
+    # --- LOGIC GROUP HANDLING ---
+    is_group = sender.endswith("@g.us")
+    
+    # Jika di Grup, bot HANYA menjawab jika di-mention
+    # Asumsi user mengetik: "@628xxxx pertanyaan" atau tag bot
+    if is_group:
+        # Daftar panggilan biar bot nengok walau kontak disave aneh-aneh
+            triggers = [
+                "@bot", "@faq"           # Panggilan umum         # Panggilan ke admin
+            ]
+        
+            # Tambahan: Nomor Asli (Jaga-jaga kalau user gak save kontak)
+            if MY_BOT_NUMBER: triggers.append(f"@{MY_BOT_NUMBER}")
+        
+            # Cek apakah ada SALAH SATU kata di atas di pesan user
+            is_mentioned = any(t in incoming_msg.lower() for t in triggers)
+
+    # Bersihkan pesan (Hapus mention biar AI fokus ke pertanyaan)
+    clean_msg = incoming_msg
+    if is_group and MY_BOT_NUMBER:
+        clean_msg = clean_msg.replace(f"@{MY_BOT_NUMBER}", "")
+    
+    clean_msg = clean_msg.replace("@bot", "").replace("@faq", "").strip()
+    
+    print(f"🧠 Processing: '{clean_msg}' from {sender}")
+
+    # --- DATABASE SEARCH ---
+    results = database.search_faq_for_bot(clean_msg, filter_tag="Semua Modul")
+    
+    reply_text = ""
+    
+    if not results or not results['ids'][0]:
+        # Logic: Jika Private Chat, jawab sopan. Jika Group, diam (biar ga spam).
+        if not is_group:
+            reply_text = "🙏 Maaf, saya belum menemukan informasi terkait hal tersebut di SOP kami."
+    else:
+        # Ambil Top 1
+        meta = results['metadatas'][0][0]
+        dist = results['distances'][0][0]
+        score = max(0, (1 - dist) * 100)
+        
+        # Cek Threshold Score
+        if score >= config.BOT_MIN_SCORE:
+            reply_text += f"🤖 *E-Assistant Response* (Akurasi: {score:.0f}%)\n\n"
+            reply_text += f"📂 *Modul:* {meta['tag']}\n"
+            reply_text += f"📌 *Topik:* {meta['judul']}\n\n"
+            reply_text += f"{meta['jawaban_tampil']}\n"
+            
+            # Cek Gambar
+            if meta.get('path_gambar') and str(meta.get('path_gambar')).lower() != 'none':
+                reply_text += "\n🖼️ *[Gambar Terlampir]* Silakan cek Web App untuk visual."
+                
+            if meta.get('sumber_url'):
+                reply_text += f"\n🔗 {meta.get('sumber_url')}"
+        else:
+            if not is_group:
+                reply_text = "🤔 Pertanyaan kurang spesifik. Coba gunakan kata kunci lain."
+
+    # --- SEND REPLY ---
+    if reply_text:
+        send_wa_reply(sender, reply_text)
+
+@app.get("/")
+def home():
+    return {"status": "running", "service": "WhatsApp Bot Webhook"}
+
+@app.post("/webhook")
+async def fonnte_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Endpoint yang ditembak oleh Fonnte"""
+    try:
+        body = await request.json()
+        
+        sender = body.get("sender")
+        message = body.get("message")
+        
+        # Validasi sederhana
+        if sender and message and body.get("device_status") != "connect":
+            # Jalankan di background agar response webhook cepat 200 OK
+            background_tasks.add_task(process_logic, sender, message)
+            
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Error Webhook: {e}")
+        return {"status": "error"}
+
+if __name__ == "__main__":
+    # Ini untuk run manual tanpa Docker
+    uvicorn.run("bot_wa:app", host="0.0.0.0", port=8000, reload=True)
 
 ======== FILE: .\docker-compose.yml ========
 version: '3'
@@ -561,12 +693,10 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./data:/app/data             # Database Shared (Laptop <-> Docker)
-      - ./images:/app/images         # Gambar Shared
-      - ./.streamlit:/app/.streamlit # Config Tema
-    env_file:
-      - .env                         # Baca API Key dari file .env
-    # Perintah khusus jalankan User App
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./.streamlit:/app/.streamlit
+    env_file: .env
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
   # --- SERVICE 2: ADMIN APP (Port 8502) ---
@@ -575,15 +705,27 @@ services:
     container_name: faq_admin_app
     restart: always
     ports:
-      - "8502:8502"                  # Buka Pintu Belakang buat Admin
+      - "8502:8502"
     volumes:
-      - ./data:/app/data             # WAJIB SAMA agar Database Sinkron
-      - ./images:/app/images         # WAJIB SAMA agar Gambar Sinkron
+      - ./data:/app/data
+      - ./images:/app/images
       - ./.streamlit:/app/.streamlit
-    env_file:
-      - .env
-    # Perintah khusus jalankan Admin Console
+    env_file: .env
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
+
+  # --- SERVICE 3: WHATSAPP BOT (Port 8000) ---
+  faq-bot:
+    build: .
+    container_name: faq_bot_wa
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+    env_file: .env
+    # Menjalankan FastAPI dengan Uvicorn
+    command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
 
 ======== FILE: .\Dokumentasi.md ========
 </dokumentasi_perjalanan_pengembangan>
@@ -749,6 +891,62 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 
 ---
 
+## 📱 Bagian 5: Omnichannel Expansion (WhatsApp Integration)
+
+Fokus pada perluasan aksesibilitas sistem agar bisa dijangkau oleh staf medis melalui HP tanpa perlu login komputer.
+
+### 5.1. Decoupled Architecture (Microservice Approach)
+*   **Masalah:** Awalnya logika pencarian terikat erat (*tightly coupled*) di dalam `app.py` Streamlit. Membuat skrip Bot WA terpisah menjadi mustahil karena error dependency `streamlit` context.
+*   **Keputusan:** Refactoring `database.py` menjadi pola **Hybrid Access**.
+*   **Mekanisme:**
+    1.  **Raw Logic Layer:** Fungsi murni Python untuk koneksi DB & Embedding (tanpa cache). Digunakan oleh Bot WA.
+    2.  **Cached Wrapper Layer:** Membungkus Raw Logic dengan `@st.cache_data`. Digunakan oleh Web App untuk performa.
+*   **Benefit:** **Code Reusability**. Satu otak (core logic) dipakai oleh dua tubuh (Web & WA) secara simultan tanpa konflik.
+
+### 5.2. Context-Aware Group Logic (Etika Robot)
+*   **Masalah:** Saat bot dimasukkan ke Grup WA RS, bot menjawab *semua* chat yang masuk (termasuk percakapan santai), menyebabkan SPAM.
+*   **Keputusan:** Implementasi **Selective Trigger Logic**.
+*   **Mekanisme:**
+    *   **Private Chat:** Bot selalu menjawab.
+    *   **Group Chat:** Bot **DIAM** kecuali dipanggil (Mention `@Bot`, `@628...`, atau keyword `min/tolong/tanya`).
+*   **Benefit:** **User Experience yang Sopan**. Bot tidak mengganggu dinamika grup manusia, hanya muncul saat dibutuhkan.
+
+### 5.3. Gateway Strategy (Hackathon Speed)
+*   **Masalah:** Menggunakan WhatsApp Official API (BSP) membutuhkan verifikasi bisnis Meta (Facebook) yang memakan waktu 24-48 jam. Tidak kekejar untuk deadline lomba.
+*   **Keputusan:** Menggunakan **Unofficial Gateway (Fonnte) + Webhook**.
+*   **Mekanisme:** Fonnte bertindak sebagai "Jembatan" yang meneruskan pesan WA ke server backend (Python FastAPI) via HTTP POST.
+*   **Benefit:** **Instant Deployment**. Bot bisa hidup dalam hitungan menit tanpa birokrasi legalitas.
+
+---
+
+## 🧠 Bagian 6: Adaptive Intelligence Configuration
+
+Fokus pada fleksibilitas logika AI tanpa perlu mengubah kode sumber (Hardcoding).
+
+### 6.1. Dynamic Thresholding (Environment Variables)
+*   **Masalah:** Menentukan seberapa "Pede" bot menjawab (Score > 80%?) atau seberapa "Beda" jawaban 1 dan 2 (Gap > 10%?) adalah angka subjektif. Jika di-hardcode, mengubahnya butuh restart/deploy ulang.
+*   **Keputusan:** Memindahkan parameter logika ke **Environment Variables (`.env`)**.
+    *   `BOT_MIN_SCORE`: Batas minimum kemiripan.
+    *   `BOT_MIN_GAP`: Jarak aman antara ranking 1 dan 2.
+*   **Benefit:** **Operational Agility**. Admin bisa mengubah sifat bot (dari "Galak/Pelit Jawaban" menjadi "Ramah/Mudah Menjawab") hanya dengan edit text file di server, tanpa menyentuh kodingan.
+
+### 6.2. Trap-Keywords Strategy
+*   **Masalah:** User sering menyimpan nomor bot dengan nama acak (misal: "Robot RS", "Si Pinter"). Logika deteksi mention `@628...` sering gagal.
+*   **Keputusan:** Implementasi **Generic Trigger List**.
+*   **Mekanisme:** Bot tidak hanya mendeteksi nomor HP-nya sendiri, tapi juga bereaksi pada kata kunci sosial: *"Admin", "Min", "Tolong", "Tanya", "Help"*.
+*   **Benefit:** **High Availability**. Bot tetap responsif meskipun user tidak tahu cara mention yang benar.
+
+---
+
+## 🌐 Bagian 7: Connectivity & Deployment
+
+### 7.1. Tunneling for POC (Ngrok)
+*   **Masalah:** Mendemokan integrasi WhatsApp (Internet Public) ke Server Laptop (Localhost) tidak bisa dilakukan secara langsung karena terhalang NAT/Firewall.
+*   **Keputusan:** Menggunakan **Ngrok Secure Tunnels**.
+*   **Benefit:** Memungkinkan demo **Live Real-time** kepada juri menggunakan infrastruktur laptop lokal, namun tetap terintegrasi dengan dunia luar (WhatsApp).
+
+---
+
 ## 📊 Ringkasan: Before vs After
 
 | Aspek | Status Awal (Before) | Status Final (Golden Master) |
@@ -761,8 +959,28 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 | **Admin Input** | Manual & Rawan Typo | **Smart Toolbar & Preview Mode** |
 | **Keamanan** | Hardcoded Credentials | **Environment Variables (.env)** |
 | **Stabilitas** | Rawan Crash (SQLite Locked) | **Robust (Retry Mechanism)** |
+| **Aksesibilitas** | Web Only (Harus Login PC) | **Omnichannel (Web + WhatsApp 24/7)** |
+| **Arsitektur DB** | Tightly Coupled (Streamlit Only) | **Hybrid Microservice (Web & API Ready)** |
+| **Logika WA** | Spammy (Jawab Semua) | **Context-Aware (Sopan di Grup)** |
+| **Config AI** | Hardcoded di Python | **Dynamic Config (.env)** |
+| **Trigger Bot** | Kaku (@Nomor) | **Fleksibel (Natural Language Triggers)** |
 
----
+### 🗺️ Arsitektur Sistem Final
+
+```mermaid
+graph TD
+    UserWA[User WhatsApp] -->|Chat| WA_Server[WhatsApp Server]
+    WA_Server -->|Push| Fonnte[Fonnte Gateway]
+    Fonnte -->|Webhook POST| Ngrok[Ngrok Tunnel]
+    Ngrok -->|Forward| FastAPI[Bot Service (FastAPI)]
+    
+    UserWeb[User Browser] -->|HTTP| Streamlit[Web App (Streamlit)]
+    
+    FastAPI -->|Raw Query| ChromaDB[(Vector Database)]
+    Streamlit -->|Cached Query| ChromaDB
+    
+    ChromaDB <-->|Embedding| GeminiAI[Google Gemini API]
+```
 
 ### ✅ Status Sistem Saat Ini
 Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-Ready** skala departemen dengan karakteristik:
@@ -775,7 +993,7 @@ Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-R
 
 
 </next_pengembangan>
-Bot WA
+Deploy dan pengembangan logika bot
 </next_pengembangan>
 
 
@@ -788,7 +1006,7 @@ Berikut untuk codesnya yang terbaru:
 
 </kode_baru>
 
-Kira-kira seperti ini projectku.
+Kira-kira seperti ini projectku. apakah siap untuk dilombakan? tinggal 1 minggu lagi ini btw, hehe....
 
 
 
@@ -809,6 +1027,10 @@ streamlit==1.51.0
 chromadb==1.3.4
 pandas
 google-genai
+python-dotenv
+fastapi
+uvicorn
+requests
 # pysqlite3-binary PENTING untuk mengatasi limitasi SQLite lama di container Linux
 pysqlite3-binary; sys_platform == 'linux'
 watchdog
@@ -925,13 +1147,11 @@ with tab2:
         # Row 3: Meta Info & Upload
         c_k, c_s = st.columns(2)
         with c_k: 
-            # === UPDATE: REBRANDING UI HYDE ===
             st.markdown("Populasi Keyword / Bahasa User (HyDE) 👇")
             i_key = st.text_input("Hidden Label", value=default_key, key="in_k", 
                                   placeholder="Contoh: Gagal login, User not found, Tombol mati...",
                                   label_visibility="collapsed",
-                                  help="Masukkan kata-kata yang mungkin diketik user saat panik (Slang/Short).")
-            # ==================================
+                                  help="Masukkan kata-kata yang mungkin diketik user saat panik.")
             
         with c_s: 
             st.markdown("URL Sumber (Opsional)")
@@ -1043,11 +1263,7 @@ with tab3:
                 
                 e_jud = st.text_input("Judul SOP", value=row['Judul'])
                 e_jaw = st.text_area("Jawaban (Gunakan [GAMBAR X])", value=row['Jawaban'], height=200)
-                
-                # UPDATE UI DI SINI JUGA
-                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], 
-                                      help="Isi dengan variasi pertanyaan user.")
-                
+                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], help="Isi dengan variasi pertanyaan user.")
                 e_src = st.text_input("Source URL", value=row['Source'])
                 
                 st.markdown(f"**Path Gambar Saat Ini:** `{row['Gambar']}`")
@@ -1132,7 +1348,6 @@ st.set_option('deprecation.showfileUploaderEncoding', False)
 warnings.filterwarnings("ignore")
 
 # Load Konfigurasi Tag dari JSON (Single Source of Truth)
-# Agar warna sinkron dengan Admin Console
 TAGS_MAP = utils.load_tags_config()
 
 # CSS Styling
@@ -1333,7 +1548,7 @@ else:
     st.markdown(f"**Menampilkan {start_idx+1}-{min(end_idx, total_docs)} dari {total_docs} data**")
     
     for item in page_data:
-        # 1. Badge Warna (DINAMIS DARI CONFIG JSON)
+        # 1. Badge Warna
         tag = item.get('tag', 'Umum')
         badge_color = get_badge_color_name(tag)
         
@@ -1359,11 +1574,150 @@ else:
         with c1:
             if st.session_state.page > 0:
                 if st.button("⬅️ Sebelumnya"):
-                    st.session_state.page -= 1; st.rerun()
+                    st.session_state.page -= 1
+                    st.rerun()
         with c3:
             if st.session_state.page < total_pages - 1:
                 if st.button("Berikutnya ➡️"):
-                    st.session_state.page += 1; st.rerun()
+                    st.session_state.page += 1
+                    st.rerun()
+
+======== FILE: .\bot_wa.py ========
+import os
+import requests
+import uvicorn
+from fastapi import FastAPI, Request, BackgroundTasks
+from dotenv import load_dotenv
+from src import database, config
+
+# Load Environment Variables
+load_dotenv()
+
+app = FastAPI()
+
+# --- CONFIG ---
+FONNTE_TOKEN = os.getenv("FONNTE_TOKEN")
+# Ambil nomor bot sendiri dari config/env untuk logic group mention
+# Jika tidak diset, default kosong (hati-hati logic group mungkin kurang akurat)
+MY_BOT_NUMBER = os.getenv("BOT_NUMBER", "") 
+
+if not FONNTE_TOKEN:
+    print("⚠️ WARNING: FONNTE_TOKEN belum diisi di .env!")
+
+def send_wa_reply(target, message):
+    """Kirim pesan balasan via Fonnte API"""
+    headers = {
+        "Authorization": FONNTE_TOKEN,
+    }
+    # Fonnte support text markdown (Bold, Italic)
+    data = {
+        "target": target,
+        "message": message,
+    }
+
+    try:
+        url = "https://api.fonnte.com/send"
+        resp = requests.post(url, headers=headers, data=data)
+        print(f"✅ [Fonnte] Reply sent to {target} | Status: {resp.status_code}")
+    except Exception as e:
+        print(f"❌ [Fonnte] Error sending message: {e}")
+
+def process_logic(sender, incoming_msg):
+    """
+    Otak Bot:
+    1. Filter Group vs Private
+    2. Search Database
+    3. Generate Reply
+    """
+    
+    # --- LOGIC GROUP HANDLING ---
+    is_group = sender.endswith("@g.us")
+    
+    # Jika di Grup, bot HANYA menjawab jika di-mention
+    # Asumsi user mengetik: "@628xxxx pertanyaan" atau tag bot
+    if is_group:
+        # Daftar panggilan biar bot nengok walau kontak disave aneh-aneh
+            triggers = [
+                "@bot", "@faq"           # Panggilan umum         # Panggilan ke admin
+            ]
+        
+            # Tambahan: Nomor Asli (Jaga-jaga kalau user gak save kontak)
+            if MY_BOT_NUMBER: triggers.append(f"@{MY_BOT_NUMBER}")
+        
+            # Cek apakah ada SALAH SATU kata di atas di pesan user
+            is_mentioned = any(t in incoming_msg.lower() for t in triggers)
+
+    # Bersihkan pesan (Hapus mention biar AI fokus ke pertanyaan)
+    clean_msg = incoming_msg
+    if is_group and MY_BOT_NUMBER:
+        clean_msg = clean_msg.replace(f"@{MY_BOT_NUMBER}", "")
+    
+    clean_msg = clean_msg.replace("@bot", "").replace("@faq", "").strip()
+    
+    print(f"🧠 Processing: '{clean_msg}' from {sender}")
+
+    # --- DATABASE SEARCH ---
+    results = database.search_faq_for_bot(clean_msg, filter_tag="Semua Modul")
+    
+    reply_text = ""
+    
+    if not results or not results['ids'][0]:
+        # Logic: Jika Private Chat, jawab sopan. Jika Group, diam (biar ga spam).
+        if not is_group:
+            reply_text = "🙏 Maaf, saya belum menemukan informasi terkait hal tersebut di SOP kami."
+    else:
+        # Ambil Top 1
+        meta = results['metadatas'][0][0]
+        dist = results['distances'][0][0]
+        score = max(0, (1 - dist) * 100)
+        
+        # Cek Threshold Score
+        if score >= config.BOT_MIN_SCORE:
+            reply_text += f"🤖 *E-Assistant Response* (Akurasi: {score:.0f}%)\n\n"
+            reply_text += f"📂 *Modul:* {meta['tag']}\n"
+            reply_text += f"📌 *Topik:* {meta['judul']}\n\n"
+            reply_text += f"{meta['jawaban_tampil']}\n"
+            
+            # Cek Gambar
+            if meta.get('path_gambar') and str(meta.get('path_gambar')).lower() != 'none':
+                reply_text += "\n🖼️ *[Gambar Terlampir]* Silakan cek Web App untuk visual."
+                
+            if meta.get('sumber_url'):
+                reply_text += f"\n🔗 {meta.get('sumber_url')}"
+        else:
+            if not is_group:
+                reply_text = "🤔 Pertanyaan kurang spesifik. Coba gunakan kata kunci lain."
+
+    # --- SEND REPLY ---
+    if reply_text:
+        send_wa_reply(sender, reply_text)
+
+@app.get("/")
+def home():
+    return {"status": "running", "service": "WhatsApp Bot Webhook"}
+
+@app.post("/webhook")
+async def fonnte_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Endpoint yang ditembak oleh Fonnte"""
+    try:
+        body = await request.json()
+        
+        sender = body.get("sender")
+        message = body.get("message")
+        
+        # Validasi sederhana
+        if sender and message and body.get("device_status") != "connect":
+            # Jalankan di background agar response webhook cepat 200 OK
+            background_tasks.add_task(process_logic, sender, message)
+            
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Error Webhook: {e}")
+        return {"status": "error"}
+
+if __name__ == "__main__":
+    # Ini untuk run manual tanpa Docker
+    uvicorn.run("bot_wa:app", host="0.0.0.0", port=8000, reload=True)
 
 ======== FILE: .\docker-compose.yml ========
 version: '3'
@@ -1377,12 +1731,10 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./data:/app/data             # Database Shared (Laptop <-> Docker)
-      - ./images:/app/images         # Gambar Shared
-      - ./.streamlit:/app/.streamlit # Config Tema
-    env_file:
-      - .env                         # Baca API Key dari file .env
-    # Perintah khusus jalankan User App
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./.streamlit:/app/.streamlit
+    env_file: .env
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
   # --- SERVICE 2: ADMIN APP (Port 8502) ---
@@ -1391,15 +1743,27 @@ services:
     container_name: faq_admin_app
     restart: always
     ports:
-      - "8502:8502"                  # Buka Pintu Belakang buat Admin
+      - "8502:8502"
     volumes:
-      - ./data:/app/data             # WAJIB SAMA agar Database Sinkron
-      - ./images:/app/images         # WAJIB SAMA agar Gambar Sinkron
+      - ./data:/app/data
+      - ./images:/app/images
       - ./.streamlit:/app/.streamlit
-    env_file:
-      - .env
-    # Perintah khusus jalankan Admin Console
+    env_file: .env
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
+
+  # --- SERVICE 3: WHATSAPP BOT (Port 8000) ---
+  faq-bot:
+    build: .
+    container_name: faq_bot_wa
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+    env_file: .env
+    # Menjalankan FastAPI dengan Uvicorn
+    command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
 
 ======== FILE: .\Dokumentasi.md ========
 </dokumentasi_perjalanan_pengembangan>
@@ -1565,6 +1929,62 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 
 ---
 
+## 📱 Bagian 5: Omnichannel Expansion (WhatsApp Integration)
+
+Fokus pada perluasan aksesibilitas sistem agar bisa dijangkau oleh staf medis melalui HP tanpa perlu login komputer.
+
+### 5.1. Decoupled Architecture (Microservice Approach)
+*   **Masalah:** Awalnya logika pencarian terikat erat (*tightly coupled*) di dalam `app.py` Streamlit. Membuat skrip Bot WA terpisah menjadi mustahil karena error dependency `streamlit` context.
+*   **Keputusan:** Refactoring `database.py` menjadi pola **Hybrid Access**.
+*   **Mekanisme:**
+    1.  **Raw Logic Layer:** Fungsi murni Python untuk koneksi DB & Embedding (tanpa cache). Digunakan oleh Bot WA.
+    2.  **Cached Wrapper Layer:** Membungkus Raw Logic dengan `@st.cache_data`. Digunakan oleh Web App untuk performa.
+*   **Benefit:** **Code Reusability**. Satu otak (core logic) dipakai oleh dua tubuh (Web & WA) secara simultan tanpa konflik.
+
+### 5.2. Context-Aware Group Logic (Etika Robot)
+*   **Masalah:** Saat bot dimasukkan ke Grup WA RS, bot menjawab *semua* chat yang masuk (termasuk percakapan santai), menyebabkan SPAM.
+*   **Keputusan:** Implementasi **Selective Trigger Logic**.
+*   **Mekanisme:**
+    *   **Private Chat:** Bot selalu menjawab.
+    *   **Group Chat:** Bot **DIAM** kecuali dipanggil (Mention `@Bot`, `@628...`, atau keyword `min/tolong/tanya`).
+*   **Benefit:** **User Experience yang Sopan**. Bot tidak mengganggu dinamika grup manusia, hanya muncul saat dibutuhkan.
+
+### 5.3. Gateway Strategy (Hackathon Speed)
+*   **Masalah:** Menggunakan WhatsApp Official API (BSP) membutuhkan verifikasi bisnis Meta (Facebook) yang memakan waktu 24-48 jam. Tidak kekejar untuk deadline lomba.
+*   **Keputusan:** Menggunakan **Unofficial Gateway (Fonnte) + Webhook**.
+*   **Mekanisme:** Fonnte bertindak sebagai "Jembatan" yang meneruskan pesan WA ke server backend (Python FastAPI) via HTTP POST.
+*   **Benefit:** **Instant Deployment**. Bot bisa hidup dalam hitungan menit tanpa birokrasi legalitas.
+
+---
+
+## 🧠 Bagian 6: Adaptive Intelligence Configuration
+
+Fokus pada fleksibilitas logika AI tanpa perlu mengubah kode sumber (Hardcoding).
+
+### 6.1. Dynamic Thresholding (Environment Variables)
+*   **Masalah:** Menentukan seberapa "Pede" bot menjawab (Score > 80%?) atau seberapa "Beda" jawaban 1 dan 2 (Gap > 10%?) adalah angka subjektif. Jika di-hardcode, mengubahnya butuh restart/deploy ulang.
+*   **Keputusan:** Memindahkan parameter logika ke **Environment Variables (`.env`)**.
+    *   `BOT_MIN_SCORE`: Batas minimum kemiripan.
+    *   `BOT_MIN_GAP`: Jarak aman antara ranking 1 dan 2.
+*   **Benefit:** **Operational Agility**. Admin bisa mengubah sifat bot (dari "Galak/Pelit Jawaban" menjadi "Ramah/Mudah Menjawab") hanya dengan edit text file di server, tanpa menyentuh kodingan.
+
+### 6.2. Trap-Keywords Strategy
+*   **Masalah:** User sering menyimpan nomor bot dengan nama acak (misal: "Robot RS", "Si Pinter"). Logika deteksi mention `@628...` sering gagal.
+*   **Keputusan:** Implementasi **Generic Trigger List**.
+*   **Mekanisme:** Bot tidak hanya mendeteksi nomor HP-nya sendiri, tapi juga bereaksi pada kata kunci sosial: *"Admin", "Min", "Tolong", "Tanya", "Help"*.
+*   **Benefit:** **High Availability**. Bot tetap responsif meskipun user tidak tahu cara mention yang benar.
+
+---
+
+## 🌐 Bagian 7: Connectivity & Deployment
+
+### 7.1. Tunneling for POC (Ngrok)
+*   **Masalah:** Mendemokan integrasi WhatsApp (Internet Public) ke Server Laptop (Localhost) tidak bisa dilakukan secara langsung karena terhalang NAT/Firewall.
+*   **Keputusan:** Menggunakan **Ngrok Secure Tunnels**.
+*   **Benefit:** Memungkinkan demo **Live Real-time** kepada juri menggunakan infrastruktur laptop lokal, namun tetap terintegrasi dengan dunia luar (WhatsApp).
+
+---
+
 ## 📊 Ringkasan: Before vs After
 
 | Aspek | Status Awal (Before) | Status Final (Golden Master) |
@@ -1577,8 +1997,28 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 | **Admin Input** | Manual & Rawan Typo | **Smart Toolbar & Preview Mode** |
 | **Keamanan** | Hardcoded Credentials | **Environment Variables (.env)** |
 | **Stabilitas** | Rawan Crash (SQLite Locked) | **Robust (Retry Mechanism)** |
+| **Aksesibilitas** | Web Only (Harus Login PC) | **Omnichannel (Web + WhatsApp 24/7)** |
+| **Arsitektur DB** | Tightly Coupled (Streamlit Only) | **Hybrid Microservice (Web & API Ready)** |
+| **Logika WA** | Spammy (Jawab Semua) | **Context-Aware (Sopan di Grup)** |
+| **Config AI** | Hardcoded di Python | **Dynamic Config (.env)** |
+| **Trigger Bot** | Kaku (@Nomor) | **Fleksibel (Natural Language Triggers)** |
 
----
+### 🗺️ Arsitektur Sistem Final
+
+```mermaid
+graph TD
+    UserWA[User WhatsApp] -->|Chat| WA_Server[WhatsApp Server]
+    WA_Server -->|Push| Fonnte[Fonnte Gateway]
+    Fonnte -->|Webhook POST| Ngrok[Ngrok Tunnel]
+    Ngrok -->|Forward| FastAPI[Bot Service (FastAPI)]
+    
+    UserWeb[User Browser] -->|HTTP| Streamlit[Web App (Streamlit)]
+    
+    FastAPI -->|Raw Query| ChromaDB[(Vector Database)]
+    Streamlit -->|Cached Query| ChromaDB
+    
+    ChromaDB <-->|Embedding| GeminiAI[Google Gemini API]
+```
 
 ### ✅ Status Sistem Saat Ini
 Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-Ready** skala departemen dengan karakteristik:
@@ -1591,7 +2031,7 @@ Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-R
 
 
 </next_pengembangan>
-Bot WA
+Deploy dan pengembangan logika bot
 </next_pengembangan>
 
 
@@ -1604,9 +2044,134 @@ Berikut untuk codesnya yang terbaru:
 
 </kode_baru>
 
-Kira-kira seperti ini projectku.
+Kira-kira seperti ini projectku. apakah siap untuk dilombakan? tinggal 1 minggu lagi ini btw, hehe....
 
 
+
+======== FILE: .\test_bot.py ========
+import os
+import sys
+
+# Setup path agar bisa import dari folder src
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src import database
+# IMPORT CONFIG DARI SINI
+from src.config import BOT_MIN_SCORE, BOT_MIN_GAP
+
+def simulasi_otak_bot(raw_text, filter_tag="Semua Modul"):
+    # 1. BERSIHKAN INPUT
+    clean_query = raw_text.replace("@botFaQ", "").replace("@botfaq", "").strip()
+    
+    if not clean_query:
+        return "⚠️ Masukkan pertanyaan setelah @botFaQ."
+
+    print(f"\n🧠 Sedang memproses: '{clean_query}' [Tag: {filter_tag}]...")
+
+    # 2. PANGGIL DATABASE
+    results = database.search_faq_for_bot(clean_query, filter_tag)
+
+    if not results or not results['ids'][0]:
+        return "❌ Maaf, tidak ditemukan data yang relevan di database."
+
+    # 3. EXTRACTION & SCORING
+    candidates = []
+    for i in range(len(results['ids'][0])):
+        meta = results['metadatas'][0][i]
+        dist = results['distances'][0][i]
+        score = max(0, (1 - dist) * 100)
+        
+        # Cek apakah ada gambar
+        has_image = False
+        img_path = meta.get('path_gambar', 'none')
+        if img_path and str(img_path).lower() != 'none':
+            has_image = True
+
+        candidates.append({
+            "score": score,
+            "judul": meta.get('judul'),
+            "tag": meta.get('tag'),
+            "jawaban": meta.get('jawaban_tampil'),
+            "url": meta.get('sumber_url', '-'),
+            "has_image": has_image
+        })
+
+    top1 = candidates[0]
+    top2 = candidates[1] if len(candidates) > 1 else None
+
+    # ==========================================
+    # 🚀 LOGIKA CERDAS (PAKE CONFIG ENV)
+    # ==========================================
+    
+    is_winner_absolute = False
+    
+    # Gunakan Variabel dari Config
+    if top1['score'] >= BOT_MIN_SCORE:
+        if top2:
+            gap = top1['score'] - top2['score']
+            if gap >= BOT_MIN_GAP: # Cek Gap dari Config
+                is_winner_absolute = True
+                print(f"DEBUG: Winner Mutlak! Score: {top1['score']:.1f}, Gap: {gap:.1f}")
+            else:
+                print(f"DEBUG: Score tinggi tapi saingan ketat. Gap cuma {gap:.1f}")
+        else:
+            is_winner_absolute = True
+
+    # ==========================================
+    # 📤 OUTPUT GENERATION
+    # ==========================================
+
+    response_text = ""
+
+    if is_winner_absolute:
+        response_text += f"🎯 *SOLUSI DITEMUKAN* (Akurasi: {top1['score']:.0f}%)\n"
+        response_text += f"📂 Modul: {top1['tag']}\n\n"
+        response_text += f"*{top1['judul']}*\n"
+        response_text += f"{top1['jawaban']}\n\n"
+        
+        # Tambahan Indikator Gambar
+        if top1['has_image']:
+            response_text += "🖼️ *[Gambar Terlampir]*\n\n"
+            
+        if top1['url'] and len(top1['url']) > 3:
+             response_text += f"🔗 Sumber: {top1['url']}"
+
+    else:
+        response_text += "🔍 *MUNGKIN INI YANG KAMU CARI:*\n"
+        if top1['score'] < 25:
+             response_text += "(Relevansi rendah, coba kata kunci lain)\n"
+        
+        limit = min(3, len(candidates))
+        for i in range(limit):
+            c = candidates[i]
+            icon = "1️⃣" if i == 0 else ("2️⃣" if i == 1 else "3️⃣")
+            link_txt = f" (🔗 {c['url']})" if (c['url'] and len(c['url'])>3) else ""
+            img_icon = " 🖼️" if c['has_image'] else ""
+            
+            response_text += f"\n{icon} *[{c['tag']}] {c['judul']}*{img_icon} {link_txt}"
+            response_text += f"\n   └─ Relevansi: {c['score']:.1f}%"
+    
+    return response_text
+
+if __name__ == "__main__":
+    print("="*50)
+    print("🤖 TEST BOT SIMULATOR (LOCAL)")
+    print(f"⚙️ Config Loaded: Min Score={BOT_MIN_SCORE}, Min Gap={BOT_MIN_GAP}")
+    print("="*50)
+    
+    CURRENT_TAG_CONTEXT = "Semua Modul" 
+
+    while True:
+        try:
+            user_input = input("\n💬 User: ")
+            if user_input.lower() in ['exit', 'quit']:
+                break
+            balasan = simulasi_otak_bot(user_input, filter_tag=CURRENT_TAG_CONTEXT)
+            print("-" * 20)
+            print("🤖 Bot:\n" + balasan)
+            print("-" * 20) 
+        except KeyboardInterrupt:
+            break
 
 ======== FILE: .\.streamlit\config.toml ========
 
@@ -1628,33 +2193,32 @@ load_dotenv()
 
 # --- API KEYS & AUTH ---
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "veven") # Default jika lupa set env
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "veven")
 
 if not GOOGLE_API_KEY:
     raise ValueError("❌ GOOGLE_API_KEY belum diset! Cek file .env.")
 
 # --- PATHS CONFIGURATION ---
-# Base directory proyek
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Folder Database ChromaDB
 DB_PATH = os.path.join(BASE_DIR, "data", "faq_db")
-
-# File Konfigurasi Tag (JSON)
 TAGS_FILE = os.path.join(BASE_DIR, "data", "tags_config.json")
-
-# Folder Gambar
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
-
-# File Log Pencarian Gagal
 FAILED_SEARCH_LOG = os.path.join(BASE_DIR, "data", "failed_searches.csv")
-
-# Nama Collection di ChromaDB
 COLLECTION_NAME = "faq_universal_v1"
 
-# Setup Folder jika belum ada
+# Setup Folder
 os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 os.makedirs(IMAGES_DIR, exist_ok=True)
+
+# --- BOT LOGIC CONFIGURATION (NEW) ---
+# Mengambil nilai dari .env, default ke 80.0 dan 10.0 jika tidak ada
+try:
+    BOT_MIN_SCORE = float(os.getenv("BOT_MIN_SCORE", "80.0"))
+    BOT_MIN_GAP = float(os.getenv("BOT_MIN_GAP", "10.0"))
+except ValueError:
+    print("⚠️ Format angka di .env salah, menggunakan default (80.0 & 10.0)")
+    BOT_MIN_SCORE = 80.0
+    BOT_MIN_GAP = 10.0
 
 ======== FILE: .\src\database.py ========
 # --- 1. FORCE USE NEW SQLITE (Wajib Paling Atas untuk Docker/Linux) ---
@@ -1665,7 +2229,7 @@ try:
 except ImportError:
     pass
 
-# --- 2. IMPORTS ---
+# --- 2. IMPORTS LENGKAP ---
 import chromadb
 import pandas as pd
 import streamlit as st
@@ -1676,13 +2240,13 @@ import os
 from google import genai
 from google.genai import types
 from .config import GOOGLE_API_KEY, DB_PATH, COLLECTION_NAME
-# Import load_tags_config untuk mengambil deskripsi tag (Sinonim)
 from .utils import clean_text_for_embedding, load_tags_config
 
 # --- 3. RETRY DECORATOR (SAFE CONCURRENCY) ---
 def retry_on_lock(max_retries=10, base_delay=0.1):
     """
     Menangani error 'Database Locked' pada SQLite dengan Jitter Backoff.
+    Aman digunakan oleh Streamlit maupun Bot eksternal.
     """
     def decorator(func):
         @functools.wraps(func)
@@ -1703,23 +2267,20 @@ def retry_on_lock(max_retries=10, base_delay=0.1):
         return wrapper
     return decorator
 
-# --- 4. CLIENT INITIALIZATION (CACHED) ---
-@st.cache_resource(show_spinner=False)
-def get_db_client():
-    return chromadb.PersistentClient(path=DB_PATH)
+# --- 4. RAW FUNCTIONS (UNTUK BOT WA / API) ---
+# Fungsi-fungsi ini TIDAK menggunakan @st.cache, jadi aman dipanggil script luar.
 
-@st.cache_resource(show_spinner=False)
-def get_ai_client():
+def _get_ai_client_raw():
+    """Membuat koneksi ke Google Gemini (Tanpa Cache Streamlit)"""
     return genai.Client(api_key=GOOGLE_API_KEY)
 
-def get_collection():
-    client = get_db_client()
-    return client.get_or_create_collection(name=COLLECTION_NAME)
+def _get_db_client_raw():
+    """Membuat koneksi ke ChromaDB (Tanpa Cache Streamlit)"""
+    return chromadb.PersistentClient(path=DB_PATH)
 
-# --- 5. EMBEDDING (CACHED) ---
-@st.cache_data(show_spinner=False)
-def generate_embedding_cached(text):
-    client = get_ai_client()
+def _generate_embedding_raw(text):
+    """Generate Embedding langsung (Tanpa Cache Streamlit)"""
+    client = _get_ai_client_raw()
     try:
         response = client.models.embed_content(
             model="models/gemini-embedding-001",
@@ -1730,6 +2291,26 @@ def generate_embedding_cached(text):
     except Exception as e:
         print(f"⚠️ Error Embedding AI: {e}")
         return []
+
+# --- 5. STREAMLIT CACHED FUNCTIONS (UNTUK WEB APP) ---
+# Fungsi ini khusus untuk Web App agar performa cepat (pake cache).
+
+@st.cache_resource(show_spinner=False)
+def get_db_client():
+    return _get_db_client_raw()
+
+@st.cache_resource(show_spinner=False)
+def get_ai_client():
+    return _get_ai_client_raw()
+
+def get_collection():
+    client = get_db_client()
+    return client.get_or_create_collection(name=COLLECTION_NAME)
+
+@st.cache_data(show_spinner=False)
+def generate_embedding_cached(text):
+    # Wrapper agar embedding di-cache oleh Streamlit
+    return _generate_embedding_raw(text)
 
 # --- 6. INTERNAL HELPER (ID GENERATOR) ---
 def _get_next_id_internal(collection):
@@ -1746,16 +2327,19 @@ def _get_next_id_internal(collection):
     if not numeric_ids: return "1"
     return str(max(numeric_ids) + 1)
 
-# --- 7. CORE LOGIC (READ - USER) ---
+# --- 7. CORE LOGIC (READ - USER WEB APP) ---
 @retry_on_lock()
 def search_faq(query_text, filter_tag=None, n_results=50):
+    """
+    Digunakan oleh app.py (Web). Menggunakan Embedding Ter-Cache.
+    """
     col = get_collection()
-    vec = generate_embedding_cached(query_text)
+    vec = generate_embedding_cached(query_text) # Pake Cache
     
     if not vec: 
         return {"ids": [[]], "metadatas": [[]], "distances": [[]]}
 
-    # Pre-Filtering logic (Where Clause)
+    # Pre-Filtering logic
     where_clause = {"tag": filter_tag} if (filter_tag and filter_tag != "Semua Modul") else None
     
     return col.query(
@@ -1794,6 +2378,8 @@ def get_unique_tags_from_db():
     return sorted(list(unique_tags))
 
 # --- 8. CORE LOGIC (WRITE - ADMIN) ---
+# Admin selalu diakses via Streamlit, jadi aman pakai retry dan logic biasa.
+
 def get_all_data_as_df():
     col = get_collection()
     data = col.get(include=['metadatas', 'documents'])
@@ -1828,25 +2414,21 @@ def upsert_faq(doc_id, tag, judul, jawaban, keyword, img_paths, src_url):
     
     clean_jawaban = clean_text_for_embedding(jawaban)
     
-    # --- LOGIC BARU: AMBIL DESKRIPSI TAG ---
     try:
-        # Load config terbaru biar dapat deskripsi sinonim (ex: IGD, Emergency)
         tags_config = load_tags_config()
         tag_desc = tags_config.get(tag, {}).get("desc", "")
     except:
         tag_desc = ""
     
-    # Gabungkan Tag + Deskripsi agar AI paham konteks
-    # Contoh hasil: "ED (IGD, Emergency, Triage, Ambulans)"
     domain_str = f"{tag} ({tag_desc})" if tag_desc else tag
 
-    # --- FORMAT EMBEDDING ROBUST (HYDE READY) ---
+    # Format Embedding HyDE
     text_embed = f"""DOMAIN: {domain_str}
 DOKUMEN: {judul}
 VARIASI PERTANYAAN USER: {keyword}
 ISI KONTEN: {clean_jawaban}"""
-    # --------------------------------------------
     
+    # Gunakan cached embedding agar konsisten, toh ini proses lambat (write)
     vector = generate_embedding_cached(text_embed)
     
     col.upsert(
@@ -1866,23 +2448,15 @@ ISI KONTEN: {clean_jawaban}"""
 
 @retry_on_lock()
 def delete_faq(doc_id):
-    """
-    Menghapus data dari DB sekaligus membersihkan file gambar
-    yang tersimpan di lokal (Zombie Cleaner).
-    """
     col = get_collection()
-    
-    # 1. Ambil path gambar sebelum hapus data
     try:
         data = col.get(ids=[str(doc_id)], include=['metadatas'])
         if data['metadatas'] and len(data['metadatas']) > 0:
             meta = data['metadatas'][0]
             img_str = meta.get('path_gambar', 'none')
-            
             if img_str and img_str.lower() != 'none':
                 paths = img_str.split(';')
                 for p in paths:
-                    # Bersihkan path (./images/...) -> real path
                     clean_path = p.replace("\\", "/")
                     if os.path.exists(clean_path):
                         try:
@@ -1893,8 +2467,36 @@ def delete_faq(doc_id):
     except Exception as e:
         print(f"⚠️ Error cleaning images: {e}")
 
-    # 2. Hapus data dari DB
     col.delete(ids=[str(doc_id)])
+
+# --- 9. SPECIAL FUNCTION FOR BOT WA (NO STREAMLIT DEPENDENCY) ---
+@retry_on_lock()
+def search_faq_for_bot(query_text, filter_tag="Semua Modul"):
+    """
+    Fungsi khusus untuk Bot WA / API External.
+    MANDIRI: Membuka koneksi sendiri, Embedding sendiri tanpa Cache Streamlit.
+    """
+    # 1. Buka Koneksi Raw (Tanpa st.cache_resource)
+    client = _get_db_client_raw()
+    col = client.get_or_create_collection(name=COLLECTION_NAME)
+    
+    # 2. Embedding Raw (Tanpa st.cache_data)
+    vec = _generate_embedding_raw(query_text)
+    
+    if not vec: 
+        return None # Return None jika gagal embedding
+
+    # 3. Filtering Logic
+    where_clause = {"tag": filter_tag} if (filter_tag and filter_tag != "Semua Modul") else None
+    
+    # 4. Query
+    results = col.query(
+        query_embeddings=[vec],
+        n_results=5, # Ambil Top 5 aja buat Bot
+        where=where_clause
+    )
+    
+    return results
 
 ======== FILE: .\src\utils.py ========
 import os

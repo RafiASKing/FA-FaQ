@@ -161,6 +161,62 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 
 ---
 
+## 📱 Bagian 5: Omnichannel Expansion (WhatsApp Integration)
+
+Fokus pada perluasan aksesibilitas sistem agar bisa dijangkau oleh staf medis melalui HP tanpa perlu login komputer.
+
+### 5.1. Decoupled Architecture (Microservice Approach)
+*   **Masalah:** Awalnya logika pencarian terikat erat (*tightly coupled*) di dalam `app.py` Streamlit. Membuat skrip Bot WA terpisah menjadi mustahil karena error dependency `streamlit` context.
+*   **Keputusan:** Refactoring `database.py` menjadi pola **Hybrid Access**.
+*   **Mekanisme:**
+    1.  **Raw Logic Layer:** Fungsi murni Python untuk koneksi DB & Embedding (tanpa cache). Digunakan oleh Bot WA.
+    2.  **Cached Wrapper Layer:** Membungkus Raw Logic dengan `@st.cache_data`. Digunakan oleh Web App untuk performa.
+*   **Benefit:** **Code Reusability**. Satu otak (core logic) dipakai oleh dua tubuh (Web & WA) secara simultan tanpa konflik.
+
+### 5.2. Context-Aware Group Logic (Etika Robot)
+*   **Masalah:** Saat bot dimasukkan ke Grup WA RS, bot menjawab *semua* chat yang masuk (termasuk percakapan santai), menyebabkan SPAM.
+*   **Keputusan:** Implementasi **Selective Trigger Logic**.
+*   **Mekanisme:**
+    *   **Private Chat:** Bot selalu menjawab.
+    *   **Group Chat:** Bot **DIAM** kecuali dipanggil (Mention `@Bot`, `@628...`, atau keyword `min/tolong/tanya`).
+*   **Benefit:** **User Experience yang Sopan**. Bot tidak mengganggu dinamika grup manusia, hanya muncul saat dibutuhkan.
+
+### 5.3. Gateway Strategy (Hackathon Speed)
+*   **Masalah:** Menggunakan WhatsApp Official API (BSP) membutuhkan verifikasi bisnis Meta (Facebook) yang memakan waktu 24-48 jam. Tidak kekejar untuk deadline lomba.
+*   **Keputusan:** Menggunakan **Unofficial Gateway (Fonnte) + Webhook**.
+*   **Mekanisme:** Fonnte bertindak sebagai "Jembatan" yang meneruskan pesan WA ke server backend (Python FastAPI) via HTTP POST.
+*   **Benefit:** **Instant Deployment**. Bot bisa hidup dalam hitungan menit tanpa birokrasi legalitas.
+
+---
+
+## 🧠 Bagian 6: Adaptive Intelligence Configuration
+
+Fokus pada fleksibilitas logika AI tanpa perlu mengubah kode sumber (Hardcoding).
+
+### 6.1. Dynamic Thresholding (Environment Variables)
+*   **Masalah:** Menentukan seberapa "Pede" bot menjawab (Score > 80%?) atau seberapa "Beda" jawaban 1 dan 2 (Gap > 10%?) adalah angka subjektif. Jika di-hardcode, mengubahnya butuh restart/deploy ulang.
+*   **Keputusan:** Memindahkan parameter logika ke **Environment Variables (`.env`)**.
+    *   `BOT_MIN_SCORE`: Batas minimum kemiripan.
+    *   `BOT_MIN_GAP`: Jarak aman antara ranking 1 dan 2.
+*   **Benefit:** **Operational Agility**. Admin bisa mengubah sifat bot (dari "Galak/Pelit Jawaban" menjadi "Ramah/Mudah Menjawab") hanya dengan edit text file di server, tanpa menyentuh kodingan.
+
+### 6.2. Trap-Keywords Strategy
+*   **Masalah:** User sering menyimpan nomor bot dengan nama acak (misal: "Robot RS", "Si Pinter"). Logika deteksi mention `@628...` sering gagal.
+*   **Keputusan:** Implementasi **Generic Trigger List**.
+*   **Mekanisme:** Bot tidak hanya mendeteksi nomor HP-nya sendiri, tapi juga bereaksi pada kata kunci sosial: *"Admin", "Min", "Tolong", "Tanya", "Help"*.
+*   **Benefit:** **High Availability**. Bot tetap responsif meskipun user tidak tahu cara mention yang benar.
+
+---
+
+## 🌐 Bagian 7: Connectivity & Deployment
+
+### 7.1. Tunneling for POC (Ngrok)
+*   **Masalah:** Mendemokan integrasi WhatsApp (Internet Public) ke Server Laptop (Localhost) tidak bisa dilakukan secara langsung karena terhalang NAT/Firewall.
+*   **Keputusan:** Menggunakan **Ngrok Secure Tunnels**.
+*   **Benefit:** Memungkinkan demo **Live Real-time** kepada juri menggunakan infrastruktur laptop lokal, namun tetap terintegrasi dengan dunia luar (WhatsApp).
+
+---
+
 ## 📊 Ringkasan: Before vs After
 
 | Aspek | Status Awal (Before) | Status Final (Golden Master) |
@@ -173,8 +229,28 @@ Fokus pada fondasi teknis, keamanan, dan deployment.
 | **Admin Input** | Manual & Rawan Typo | **Smart Toolbar & Preview Mode** |
 | **Keamanan** | Hardcoded Credentials | **Environment Variables (.env)** |
 | **Stabilitas** | Rawan Crash (SQLite Locked) | **Robust (Retry Mechanism)** |
+| **Aksesibilitas** | Web Only (Harus Login PC) | **Omnichannel (Web + WhatsApp 24/7)** |
+| **Arsitektur DB** | Tightly Coupled (Streamlit Only) | **Hybrid Microservice (Web & API Ready)** |
+| **Logika WA** | Spammy (Jawab Semua) | **Context-Aware (Sopan di Grup)** |
+| **Config AI** | Hardcoded di Python | **Dynamic Config (.env)** |
+| **Trigger Bot** | Kaku (@Nomor) | **Fleksibel (Natural Language Triggers)** |
 
----
+### 🗺️ Arsitektur Sistem Final
+
+```mermaid
+graph TD
+    UserWA[User WhatsApp] -->|Chat| WA_Server[WhatsApp Server]
+    WA_Server -->|Push| Fonnte[Fonnte Gateway]
+    Fonnte -->|Webhook POST| Ngrok[Ngrok Tunnel]
+    Ngrok -->|Forward| FastAPI[Bot Service (FastAPI)]
+    
+    UserWeb[User Browser] -->|HTTP| Streamlit[Web App (Streamlit)]
+    
+    FastAPI -->|Raw Query| ChromaDB[(Vector Database)]
+    Streamlit -->|Cached Query| ChromaDB
+    
+    ChromaDB <-->|Embedding| GeminiAI[Google Gemini API]
+```
 
 ### ✅ Status Sistem Saat Ini
 Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-Ready** skala departemen dengan karakteristik:
@@ -187,7 +263,7 @@ Sistem telah berevolusi dari sekadar *Prototype* menjadi aplikasi **Production-R
 
 
 </next_pengembangan>
-Bot WA
+Deploy dan pengembangan logika bot
 </next_pengembangan>
 
 

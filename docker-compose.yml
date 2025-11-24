@@ -9,12 +9,10 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./data:/app/data             # Database Shared (Laptop <-> Docker)
-      - ./images:/app/images         # Gambar Shared
-      - ./.streamlit:/app/.streamlit # Config Tema
-    env_file:
-      - .env                         # Baca API Key dari file .env
-    # Perintah khusus jalankan User App
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./.streamlit:/app/.streamlit
+    env_file: .env
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
   # --- SERVICE 2: ADMIN APP (Port 8502) ---
@@ -23,12 +21,24 @@ services:
     container_name: faq_admin_app
     restart: always
     ports:
-      - "8502:8502"                  # Buka Pintu Belakang buat Admin
+      - "8502:8502"
     volumes:
-      - ./data:/app/data             # WAJIB SAMA agar Database Sinkron
-      - ./images:/app/images         # WAJIB SAMA agar Gambar Sinkron
+      - ./data:/app/data
+      - ./images:/app/images
       - ./.streamlit:/app/.streamlit
-    env_file:
-      - .env
-    # Perintah khusus jalankan Admin Console
+    env_file: .env
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
+
+  # --- SERVICE 3: WHATSAPP BOT (Port 8000) ---
+  faq-bot:
+    build: .
+    container_name: faq_bot_wa
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+    env_file: .env
+    # Menjalankan FastAPI dengan Uvicorn
+    command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
