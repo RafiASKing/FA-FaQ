@@ -18,5 +18,13 @@
     "Rehab": {
         "color": "#3498DB",
         "desc": "Fisioterapi, Rehab Medik"
+    },
+    "Lab": {
+        "color": "#FFA500",
+        "desc": "Laboratorium"
+    },
+    "EMR Cashier": {
+        "color": "#9B59B6",
+        "desc": ""
     }
 }

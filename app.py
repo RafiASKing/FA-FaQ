@@ -132,7 +132,8 @@ is_search_mode = False
 
 if query:
     is_search_mode = True
-    raw = database.search_faq(query, filter_tag, n_results=50)
+    # Tetap ambil agak banyak dari DB (misal 10 atau 20) buat kandidat
+    raw = database.search_faq(query, filter_tag, n_results=50) 
     
     if raw['ids'][0]:
         for i in range(len(raw['ids'][0])):
@@ -140,10 +141,14 @@ if query:
             dist = raw['distances'][0][i]
             score = max(0, (1 - dist) * 100)
             
-            # === THRESHOLD 32% ===
+            # 1. TETAPKAN SYARAT MINIMUM 32%
             if score > 32:
                 meta['score'] = score
                 results.append(meta)
+        
+        # 2. 👇 TAMBAHKAN BARIS INI (PEMOTONG) 👇
+        # Ini artinya: "Ambil list results dari urutan ke-0 sampai ke-3 aja"
+        results = results[:3]
 else:
     raw_all = database.get_all_faqs_sorted()
     if filter_tag == "Semua Modul":
