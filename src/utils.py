@@ -4,7 +4,9 @@ import re
 import random
 import string
 import time
-from .config import TAGS_FILE, IMAGES_DIR
+import csv
+from datetime import datetime
+from .config import TAGS_FILE, IMAGES_DIR, BASE_DIR 
 
 # --- DAFTAR WARNA RESMI STREAMLIT (Restricted Palette) ---
 # Admin hanya boleh memilih warna ini agar badge di UI User valid
@@ -105,3 +107,20 @@ def clean_text_for_embedding(text):
     clean = re.sub(r'\[GAMBAR\s*\d+\]', '', text, flags=re.IGNORECASE)
     # Hapus whitespace berlebih akibat penghapusan tadi
     return " ".join(clean.split())
+
+def log_failed_search(query):
+    """Mencatat pencarian yang hasilnya 0 ke file CSV"""
+    filename = os.path.join(BASE_DIR, "data", "failed_searches.csv")
+    
+    # Cek header kalau file baru
+    file_exists = os.path.exists(filename)
+    
+    try:
+        with open(filename, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Timestamp", "Query User"]) # Header
+            
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), query])
+    except Exception as e:
+        print(f"Gagal mencatat log: {e}")
