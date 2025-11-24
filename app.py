@@ -42,14 +42,10 @@ st.markdown("""
 def get_badge_color_name(tag):
     """
     Menerjemahkan HEX Code dari tags_config.json menjadi Nama Warna Streamlit.
-    Karena syntax :color-background[] tidak support HEX code custom.
     """
-    # Ambil Hex dari config JSON berdasarkan Tag
     tag_data = TAGS_MAP.get(tag, {})
-    hex_code = tag_data.get("color", "#808080").upper() # Default Gray
+    hex_code = tag_data.get("color", "#808080").upper() 
     
-    # Mapping Hex Config -> Streamlit Color Name
-    # Ini sinkron dengan palette di utils.py
     hex_to_name = {
         "#FF4B4B": "red",     # Merah (ED)
         "#2ECC71": "green",   # Hijau (OPD)
@@ -176,8 +172,43 @@ if not page_data:
         # Catat query gagal ke CSV
         try: utils.log_failed_search(query)
         except: pass
+        
+        # === CALL TO ACTION (WA BOT) ===
         st.warning(f"❌ Tidak ditemukan hasil yang relevan (Relevansi < 25%).")
-        st.caption("🔍 Query ini telah dicatat sistem untuk perbaikan data.")
+        
+        st.markdown("""
+        ### 🧐 Belum ada solusinya?
+        Sistem telah mencatat pencarianmu untuk perbaikan. Sementara itu, kamu bisa:
+        
+        1. Coba gunakan kata kunci yang lebih umum.
+        2. Atau langsung request bantuan ke Tim IT Support:
+        """)
+        
+        # GANTI NOMOR WA DI SINI (Format: 628xxx)
+        wa_number = "6289635225253" 
+        wa_text = f"Halo Admin, saya cari solusi tentang '{query}' tapi tidak ketemu di aplikasi FAQ."
+        wa_link = f"https://wa.me/{wa_number}?text={wa_text.replace(' ', '%20')}"
+        
+        st.markdown(f'''
+        <a href="{wa_link}" target="_blank" style="text-decoration: none;">
+            <button style="
+                background-color: #25D366; 
+                color: white; 
+                padding: 10px 20px; 
+                border: none; 
+                border-radius: 5px; 
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 16px;
+                display: flex;
+                align_items: center;
+                gap: 8px;">
+                📱 Chat WhatsApp Support
+            </button>
+        </a>
+        ''', unsafe_allow_html=True)
+        # ===============================
+        
     else:
         st.info("👋 Selamat Datang. Database siap digunakan.")
 else:

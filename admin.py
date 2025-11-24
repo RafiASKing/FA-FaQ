@@ -3,14 +3,13 @@ import pandas as pd
 import time
 import re
 from src import database, utils
+from src.config import ADMIN_PASSWORD, FAILED_SEARCH_LOG
 
-# --- AUTH ---
-# Password sederhana untuk demo
+# --- AUTH SYSTEM ---
 if 'auth' not in st.session_state: st.session_state.auth = False
 
 def login():
-    # Password hardcoded: "veven"
-    if st.session_state.pass_input == "veven": 
+    if st.session_state.pass_input == ADMIN_PASSWORD: 
         st.session_state.auth = True
     else:
         st.error("Password salah")
@@ -23,7 +22,7 @@ if not st.session_state.auth:
         st.text_input("Password", type="password", key="pass_input", on_change=login)
     st.stop()
 
-# --- MAIN UI ---
+# --- MAIN UI SETUP ---
 st.set_page_config(page_title="Admin Console", layout="wide")
 st.title("🛠️ Admin Console (Safe Mode)")
 tags_map = utils.load_tags_config()
@@ -33,39 +32,102 @@ if 'preview_mode' not in st.session_state: st.session_state.preview_mode = False
 if 'draft_data' not in st.session_state: st.session_state.draft_data = {}
 
 # Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📊 List Data", "➕ Tambah (Preview)", "✏️ Edit/Hapus", "⚙️ Config Tags"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Database", "➕ Tambah (Smart)", "✏️ Edit/Hapus", "⚙️ Config Tags", "📈 Analytics"
+])
 
 # === TAB 1: LIST DATA ===
 with tab1:
     if st.button("🔄 Refresh Data"):
-        st.cache_data.clear() # Clear cache agar data terbaru muncul
+        st.cache_data.clear()
         st.rerun()
-        
     df = database.get_all_data_as_df()
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# === TAB 2: TAMBAH DATA (WORKFLOW) ===
+# === TAB 2: TAMBAH DATA (SMART EDITOR) ===
 with tab2:
+    # --- SMART CALLBACKS ---
+    def add_text(text):
+        """Menambahkan teks (Bold/List) ke akhir editor"""
+        if 'in_a' in st.session_state:
+            st.session_state.in_a += text
+
+    def add_next_image_tag():
+        """
+        FITUR PINTAR (AUTO COUNTER):
+        Otomatis scan teks, hitung jumlah tag [GAMBAR X], 
+        lalu tambahkan [GAMBAR X+1].
+        """
+        current_text = st.session_state.get('in_a', "")
+        matches = re.findall(r'\[GAMBAR\s*\d+\]', current_text, flags=re.IGNORECASE)
+        next_num = len(matches) + 1
+        
+        tag_to_insert = f"\n\n[GAMBAR {next_num}]\n\n"
+        st.session_state.in_a += tag_to_insert
+
     # --- PHASE 1: INPUT FORM ---
     if not st.session_state.preview_mode:
-        st.info("💡 Tips: Gunakan [GAMBAR 1] di dalam jawaban untuk menyisipkan gambar.")
+        # Load Draft (Anti-Amnesia Logic)
+        default_tag = st.session_state.draft_data.get('tag', list(tags_map.keys())[0])
+        default_judul = st.session_state.draft_data.get('judul', '')
+        default_jawab = st.session_state.draft_data.get('jawab', '')
+        default_key = st.session_state.draft_data.get('key', '')
+        default_src = st.session_state.draft_data.get('src', '')
         
+        try: idx_tag = list(tags_map.keys()).index(default_tag)
+        except: idx_tag = 0
+
+        st.subheader("📝 Input Data Baru")
+        
+        # Row 1: Module & Judul
         col_m, col_j = st.columns([1, 3])
-        with col_m: i_tag = st.selectbox("Modul", list(tags_map.keys()), key="in_t")
-        with col_j: i_judul = st.text_input("Judul Masalah", key="in_j")
+        with col_m: i_tag = st.selectbox("Modul", list(tags_map.keys()), index=idx_tag, key="in_t")
+        with col_j: i_judul = st.text_input("Judul Masalah (SOP)", value=default_judul, key="in_j")
             
-        i_jawab = st.text_area("Jawaban / Solusi", height=200, key="in_a", 
-                              placeholder="Langkah 1: Klik tombol save.\n[GAMBAR 1]\n\nLangkah 2: Selesai.")
+        # Row 2: Smart Toolbar & Editor
+        st.markdown("**Jawaban / Solusi:**")
         
-        i_key = st.text_input("Keyword Tambahan (Opsional)", key="in_k", placeholder="Contoh: error 505, puyer, resep")
-        i_src = st.text_input("URL Sumber (ClickUp/PDF)", key="in_s")
+        # Toolbar Layout
+        tb1, tb2, tb3, tb_spacer = st.columns([1, 1, 2, 4])
+        
+        tb1.button("𝗕 Bold", on_click=add_text, args=(" **teks tebal** ",), 
+                   help="Tebalkan teks", use_container_width=True)
+        
+        tb2.button("Bars", on_click=add_text, args=("\n- Langkah 1\n- Langkah 2",), 
+                   help="Buat List", use_container_width=True)
+        
+        # Tombol Ajaib
+        tb3.button("📸 + Sisipkan Gambar", on_click=add_next_image_tag, 
+                   type="primary", icon="🖼️", use_container_width=True,
+                   help="Otomatis memasukkan tag [GAMBAR 1], [GAMBAR 2], dst.")
+
+        # Text Area Utama
+        i_jawab = st.text_area("Editor", value=default_jawab, height=300, key="in_a", label_visibility="collapsed")
+        st.caption("💡 *Tips: Klik tombol '📸' untuk memasukkan placeholder gambar secara urut.*")
+        
+        # Row 3: Meta Info & Upload
+        c_k, c_s = st.columns(2)
+        with c_k: 
+            # === UPDATE: REBRANDING UI HYDE ===
+            st.markdown("Populasi Keyword / Bahasa User (HyDE) 👇")
+            i_key = st.text_input("Hidden Label", value=default_key, key="in_k", 
+                                  placeholder="Contoh: Gagal login, User not found, Tombol mati...",
+                                  label_visibility="collapsed",
+                                  help="Masukkan kata-kata yang mungkin diketik user saat panik (Slang/Short).")
+            # ==================================
+            
+        with c_s: 
+            st.markdown("URL Sumber (Opsional)")
+            i_src = st.text_input("Hidden Label 2", value=default_src, key="in_s", label_visibility="collapsed")
+        
         i_imgs = st.file_uploader("Upload Gambar", accept_multiple_files=True, key="in_i")
         
-        if st.button("🔍 Lanjut ke Preview", type="primary"):
+        st.divider()
+        if st.button("🔍 Lanjut ke Preview", type="primary", use_container_width=True):
             if not i_judul or not i_jawab:
                 st.error("Judul & Jawaban wajib diisi!")
             else:
-                # Simpan draft di memori sementara
+                # Simpan Draft ke Session State
                 st.session_state.draft_data = {
                     "tag": i_tag, "judul": i_judul, "jawab": i_jawab,
                     "key": i_key, "src": i_src, "imgs": i_imgs
@@ -76,26 +138,51 @@ with tab2:
     # --- PHASE 2: PREVIEW & SUBMIT ---
     else:
         draft = st.session_state.draft_data
-        st.warning("⚠️ Mode Preview: Data belum disimpan ke Database.")
         
-        c_back, c_save = st.columns([1, 4])
+        st.info("📱 **Mode Preview:** Periksa tampilan sebelum Publish.")
+        
+        # Simulasi Tampilan User (Card)
+        with st.container(border=True):
+            hex_color = tags_map.get(draft['tag'], {}).get("color", "#808080")
+            st.markdown(f"### <span style='color:{hex_color}'>[{draft['tag']}]</span> {draft['judul']}", unsafe_allow_html=True)
+            st.caption(f"🔑 Keywords/HyDE: {draft['key']}")
+            st.divider()
+            
+            # Logic Render Gambar Sederhana untuk Preview
+            parts = re.split(r'(\[GAMBAR\s*\d+\])', draft['jawab'], flags=re.IGNORECASE)
+            imgs = draft['imgs'] or []
+            
+            for part in parts:
+                match = re.search(r'\[GAMBAR\s*(\d+)\]', part, re.IGNORECASE)
+                if match:
+                    try:
+                        idx = int(match.group(1)) - 1
+                        if 0 <= idx < len(imgs):
+                            st.image(imgs[idx], width=400, caption=f"Gambar {idx+1}")
+                        else:
+                            st.warning(f"⚠️ [GAMBAR {idx+1}] ditulis tapi file belum diupload.")
+                    except: pass
+                else:
+                    if part.strip(): st.markdown(part)
+        
+        st.divider()
+        c_back, c_save = st.columns([1, 3])
+        
         with c_back:
-            if st.button("⬅️ Edit Lagi"):
+            if st.button("⬅️ Edit Lagi", use_container_width=True):
                 st.session_state.preview_mode = False
                 st.rerun()
         
         with c_save:
-            # INI LOGIC PENTINGNYA
-            if st.button("💾 SIMPAN DATA (PUBLISH)", type="primary"):
+            if st.button("💾 PUBLISH KE DATABASE", type="primary", use_container_width=True):
                 try:
-                    with st.spinner("Sedang menyimpan (Menunggu antrian DB)..."):
-                        # 1. Simpan Gambar dulu ke Folder Lokal
+                    with st.spinner("Menyimpan ke ChromaDB..."):
+                        # 1. Simpan Gambar ke Disk
                         paths = utils.save_uploaded_images(draft['imgs'], draft['judul'], draft['tag'])
                         
-                        # 2. Simpan ke DB dengan ID "auto"
-                        # Biarkan Backend yang menghitung urutan ID agar tidak bentrok
+                        # 2. Upsert ke DB
                         new_id = database.upsert_faq(
-                            doc_id="auto", # KUNCINYA DISINI
+                            doc_id="auto",
                             tag=draft['tag'], 
                             judul=draft['judul'], 
                             jawaban=draft['jawab'], 
@@ -104,38 +191,17 @@ with tab2:
                             src_url=draft['src']
                         )
                         
-                        st.success(f"✅ Sukses! Data tersimpan dengan ID: {new_id}")
+                        st.balloons()
+                        st.success(f"✅ Data Tersimpan! ID Dokumen: {new_id}")
+                        
+                        # Reset
                         st.session_state.preview_mode = False
                         st.session_state.draft_data = {}
-                        database.get_all_data_as_df.clear() # Clear cache tabel
+                        database.get_all_data_as_df.clear()
                         time.sleep(2)
                         st.rerun()
                 except Exception as e: 
-                    st.error(f"Gagal Menyimpan: {e}")
-
-        # --- Tampilan Preview User ---
-        st.divider()
-        st.subheader("📱 Preview Tampilan User")
-        
-        hex_color = tags_map.get(draft['tag'], {}).get("color", "#808080")
-        st.markdown(f"### <span style='color:{hex_color}'>[{draft['tag']}]</span> {draft['judul']}", unsafe_allow_html=True)
-        
-        # Render sederhana untuk preview
-        parts = re.split(r'(\[GAMBAR\s*\d+\])', draft['jawab'], flags=re.IGNORECASE)
-        imgs = draft['imgs'] or []
-        
-        for part in parts:
-            match = re.search(r'\[GAMBAR\s*(\d+)\]', part, re.IGNORECASE)
-            if match:
-                try:
-                    idx = int(match.group(1)) - 1
-                    if 0 <= idx < len(imgs):
-                        st.image(imgs[idx], width=300, caption=f"Gambar {idx+1}")
-                    else:
-                        st.caption(f"⚠️ Placeholder [GAMBAR {idx+1}] kosong")
-                except: pass
-            else:
-                if part.strip(): st.markdown(part)
+                    st.error(f"Error Save: {e}")
 
 # === TAB 3: EDIT/HAPUS ===
 with tab3:
@@ -143,9 +209,8 @@ with tab3:
     df_e = database.get_all_data_as_df()
     
     if not df_e.empty:
-        # Dropdown pilih data
         opts = [f"{r['ID']} | {r['Judul']}" for _, r in df_e.iterrows()]
-        sel = st.selectbox("Pilih Data untuk Diedit", opts)
+        sel = st.selectbox("Pilih Data", opts)
         
         if sel:
             sel_id = sel.split(" | ")[0]
@@ -156,58 +221,79 @@ with tab3:
                 idx = list(tags_map.keys()).index(curr) if curr in tags_map else 0
                 
                 c_id, c_t = st.columns([1, 4])
-                with c_id: st.text_input("ID (Locked)", value=sel_id, disabled=True)
+                with c_id: st.text_input("ID", value=sel_id, disabled=True)
                 with c_t: e_tag = st.selectbox("Modul", list(tags_map.keys()), index=idx)
                 
-                e_jud = st.text_input("Judul", value=row['Judul'])
-                e_jaw = st.text_area("Jawaban", value=row['Jawaban'], height=200)
-                e_key = st.text_input("Keyword", value=row['Keyword'])
+                e_jud = st.text_input("Judul SOP", value=row['Judul'])
+                e_jaw = st.text_area("Jawaban (Gunakan [GAMBAR X])", value=row['Jawaban'], height=200)
+                
+                # UPDATE UI DI SINI JUGA
+                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], 
+                                      help="Isi dengan variasi pertanyaan user.")
+                
                 e_src = st.text_input("Source URL", value=row['Source'])
                 
                 st.markdown(f"**Path Gambar Saat Ini:** `{row['Gambar']}`")
-                st.info("Biarkan kosong jika tidak ingin mengubah gambar.")
-                e_new = st.file_uploader("Ganti Gambar (Overwrite)", accept_multiple_files=True)
+                e_new = st.file_uploader("Timpa Gambar Baru (Opsional)", accept_multiple_files=True)
                 
                 c_up, c_del = st.columns([1, 1])
                 
-                # UPDATE BTN
                 if c_up.form_submit_button("💾 UPDATE DATA"):
                     p = row['Gambar']
                     if e_new: 
                         p = utils.save_uploaded_images(e_new, e_jud, e_tag)
                     
-                    # Panggil upsert dengan ID LAMA (Update Mode)
                     database.upsert_faq(sel_id, e_tag, e_jud, e_jaw, e_key, p, e_src)
-                    
-                    st.toast("Update Berhasil!", icon="✅")
+                    st.toast("Data Updated!", icon="✅")
                     database.get_all_data_as_df.clear()
                     time.sleep(1)
                     st.rerun()
                 
-                # DELETE BTN
                 if c_del.form_submit_button("🗑️ HAPUS PERMANEN", type="primary"):
                     database.delete_faq(sel_id)
-                    st.toast("Data Dihapus.", icon="🗑️")
+                    st.toast("Data & Gambar Dihapus.", icon="🗑️")
                     database.get_all_data_as_df.clear()
                     time.sleep(1)
                     st.rerun()
 
 # === TAB 4: CONFIG ===
 with tab4:
-    st.header("🎨 Pengaturan Tag & Warna")
-    flat = [{"Tag":k, "Warna":v.get("color",""), "Desc":v.get("desc","")} 
-            for k,v in tags_map.items()]
+    st.subheader("⚙️ Konfigurasi Tag")
+    flat = [{"Tag":k, "Warna":v.get("color",""), "Sinonim":v.get("desc","")} for k,v in tags_map.items()]
     st.dataframe(pd.DataFrame(flat), use_container_width=True, hide_index=True)
     
-    with st.expander("➕ Tambah Tag Baru"):
+    with st.expander("➕ Tambah / Update Tag"):
         with st.form("conf_f", clear_on_submit=True):
-            n_name = st.text_input("Nama Tag (ex: Farmasi)")
-            n_col = st.selectbox("Warna Badge", list(utils.COLOR_PALETTE.keys()))
-            n_desc = st.text_area("Deskripsi AI (Penting untuk search)")
+            c1, c2 = st.columns(2)
+            with c1: n_name = st.text_input("Nama Tag (ex: Farmasi)")
+            with c2: n_col = st.selectbox("Warna Badge", list(utils.COLOR_PALETTE.keys()))
+            n_desc = st.text_input("Sinonim / Singkatan (Penting untuk AI)", placeholder="ex: Obat, Resep, Apotek")
             
-            if st.form_submit_button("Simpan Tag"):
+            if st.form_submit_button("Simpan"):
                 if n_name:
                     hex_c = utils.COLOR_PALETTE[n_col]["hex"]
                     tags_map[n_name] = {"color": hex_c, "desc": n_desc}
                     utils.save_tags_config(tags_map)
-                    st.toast("Tag Tersimpan!"); time.sleep(1); st.rerun()
+                    st.toast("Konfigurasi Tersimpan!"); time.sleep(1); st.rerun()
+
+# === TAB 5: ANALYTICS (FEEDBACK LOOP) ===
+with tab5:
+    st.subheader("📈 Pencarian Gagal (User Feedback)")
+    st.caption("Daftar kata kunci yang dicari User tapi hasilnya < 25% (Tidak Relevan).")
+    
+    if utils.os.path.exists(FAILED_SEARCH_LOG):
+        df_log = pd.read_csv(FAILED_SEARCH_LOG)
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.metric("Total Miss", len(df_log))
+        with col2:
+            if st.button("🗑️ Clear Log"):
+                utils.os.remove(FAILED_SEARCH_LOG)
+                st.rerun()
+                
+        if not df_log.empty:
+            df_log = df_log.sort_values(by="Timestamp", ascending=False)
+            st.dataframe(df_log, use_container_width=True)
+    else:
+        st.info("Belum ada data pencarian gagal. Sistem bekerja dengan baik!")

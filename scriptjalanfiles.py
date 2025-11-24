@@ -6,7 +6,7 @@ def combine_files(root_dir, output_file, extensions):
     """
     # 1. Folder yang Harus Dikecualikan (Excluding Directories)
     # Ini akan mencegah os.walk menelusuri isi folder ini.
-    EXCLUDE_DIRS = ['venv', '.git', '__pycache__', 'node_modules', 'images', 'data'] 
+    EXCLUDE_DIRS = ['venv', '.git', '__pycache__', 'node_modules', 'images', 'data', '.env', 'Dokumentasi.md'] 
     
     # 2. File yang Harus Dikecualikan Meskipun Ekstensinya Cocok (Excluding Specific Files)
     # File data atau dokumen yang tidak relevan untuk LLM.
