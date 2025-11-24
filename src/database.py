@@ -6,7 +6,7 @@ try:
 except ImportError:
     pass
 
-# --- 2. IMPORTS ---
+# --- 2. IMPORTS LENGKAP ---
 import chromadb
 import pandas as pd
 import streamlit as st
@@ -17,7 +17,6 @@ import os
 from google import genai
 from google.genai import types
 from .config import GOOGLE_API_KEY, DB_PATH, COLLECTION_NAME
-# Import load_tags_config untuk mengambil deskripsi tag (Sinonim)
 from .utils import clean_text_for_embedding, load_tags_config
 
 # --- 3. RETRY DECORATOR (SAFE CONCURRENCY) ---
@@ -248,7 +247,6 @@ def delete_faq(doc_id):
     col.delete(ids=[str(doc_id)])
 
 # --- 9. SPECIAL FUNCTION FOR BOT WA (NO STREAMLIT DEPENDENCY) ---
-# Gunakan fungsi ini di file bot_wa.py nanti
 @retry_on_lock()
 def search_faq_for_bot(query_text, filter_tag="Semua Modul"):
     """

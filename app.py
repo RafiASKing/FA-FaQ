@@ -14,7 +14,6 @@ st.set_option('deprecation.showfileUploaderEncoding', False)
 warnings.filterwarnings("ignore")
 
 # Load Konfigurasi Tag dari JSON (Single Source of Truth)
-# Agar warna sinkron dengan Admin Console
 TAGS_MAP = utils.load_tags_config()
 
 # CSS Styling
@@ -215,7 +214,7 @@ else:
     st.markdown(f"**Menampilkan {start_idx+1}-{min(end_idx, total_docs)} dari {total_docs} data**")
     
     for item in page_data:
-        # 1. Badge Warna (DINAMIS DARI CONFIG JSON)
+        # 1. Badge Warna
         tag = item.get('tag', 'Umum')
         badge_color = get_badge_color_name(tag)
         
@@ -241,8 +240,10 @@ else:
         with c1:
             if st.session_state.page > 0:
                 if st.button("⬅️ Sebelumnya"):
-                    st.session_state.page -= 1; st.rerun()
+                    st.session_state.page -= 1
+                    st.rerun()
         with c3:
             if st.session_state.page < total_pages - 1:
                 if st.button("Berikutnya ➡️"):
-                    st.session_state.page += 1; st.rerun()
+                    st.session_state.page += 1
+                    st.rerun()

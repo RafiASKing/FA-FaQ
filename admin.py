@@ -108,13 +108,11 @@ with tab2:
         # Row 3: Meta Info & Upload
         c_k, c_s = st.columns(2)
         with c_k: 
-            # === UPDATE: REBRANDING UI HYDE ===
             st.markdown("Populasi Keyword / Bahasa User (HyDE) 👇")
             i_key = st.text_input("Hidden Label", value=default_key, key="in_k", 
                                   placeholder="Contoh: Gagal login, User not found, Tombol mati...",
                                   label_visibility="collapsed",
-                                  help="Masukkan kata-kata yang mungkin diketik user saat panik (Slang/Short).")
-            # ==================================
+                                  help="Masukkan kata-kata yang mungkin diketik user saat panik.")
             
         with c_s: 
             st.markdown("URL Sumber (Opsional)")
@@ -226,11 +224,7 @@ with tab3:
                 
                 e_jud = st.text_input("Judul SOP", value=row['Judul'])
                 e_jaw = st.text_area("Jawaban (Gunakan [GAMBAR X])", value=row['Jawaban'], height=200)
-                
-                # UPDATE UI DI SINI JUGA
-                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], 
-                                      help="Isi dengan variasi pertanyaan user.")
-                
+                e_key = st.text_input("Keyword / Bahasa User (HyDE)", value=row['Keyword'], help="Isi dengan variasi pertanyaan user.")
                 e_src = st.text_input("Source URL", value=row['Source'])
                 
                 st.markdown(f"**Path Gambar Saat Ini:** `{row['Gambar']}`")
