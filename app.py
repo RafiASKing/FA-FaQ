@@ -218,18 +218,32 @@ else:
     st.markdown(f"**Menampilkan {start_idx+1}-{min(end_idx, total_docs)} dari {total_docs} data**")
     
     for item in page_data:
-        # 1. Badge Warna
+        # 1. Badge Warna Modul
         tag = item.get('tag', 'Umum')
         badge_color = get_badge_color_name(tag)
         
-        # 2. Indikator Relevansi
+        # 2. Indikator Relevansi (CUSTOM COLOR LOGIC) 🎨
         score_md = ""
         if item.get('score'):
             sc = item['score']
-            if sc > 75: sc_color = "green"
-            elif sc > 50: sc_color = "orange"
-            else: sc_color = "red"
-            score_md = f":{sc_color}[({sc:.0f}% Relevansi)]"
+            
+            # --- ATURAN WARNA BARU ---
+            if sc > 80:
+                # > 80%: "Ijo Tua" (Kita pake Green + BOLD + Bintang biar beda)
+                # Streamlit cuma punya 1 green, jadi kita tebalkan biar tegas.
+                score_md = f":green[**({sc:.0f}% Relevansi) 🌟**]"
+            
+            elif sc > 50:
+                # 50% - 80%: "Ijo Muda" (Green biasa/tipis)
+                score_md = f":green[({sc:.0f}% Relevansi)]"
+            
+            elif sc > 36:
+                # 37% - 50%: Orange
+                score_md = f":orange[({sc:.0f}% Relevansi)]"
+            
+            else:
+                # 32% - 36%: Merah
+                score_md = f":red[({sc:.0f}% Relevansi)]"
             
         label = f":{badge_color}-background[{tag}] **{item.get('judul')}** {score_md}"
         
