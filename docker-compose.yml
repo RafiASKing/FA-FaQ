@@ -1,6 +1,7 @@
 version: '3'
 
 services:
+# --- 1. CHROMA DB SERVER ---
   chroma-server:
     image: chromadb/chroma:latest
     container_name: faq_chroma_server
@@ -8,12 +9,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # KIRI: Folder Laptop, KANAN: Folder Container
-      - ./data/chroma_data:/chroma/chroma
+      # KITA GANTI MAPPINGNYA JADI /index_data
+      - ./data/chroma_data:/index_data
     environment:
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma  # <--- INI KUNCINYA!!
-      - ANONYMIZED_TELEMETRY=False        # Biar gak kirim data ke pusat Chroma
+      - PERSIST_DIRECTORY=/index_data  <-- KITA PAKSA TULIS DI SINI
+      - ANONYMIZED_TELEMETRY=False
 
   # --- 2. WHATSAPP BOT (YANG HARUS MENGALAH) ---
   faq-bot:
