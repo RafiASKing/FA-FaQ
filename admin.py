@@ -266,7 +266,7 @@ with tab4:
     flat = [{"Tag":k, "Warna":v.get("color",""), "Sinonim":v.get("desc","")} for k,v in tags_map.items()]
     st.dataframe(pd.DataFrame(flat), use_container_width=True, hide_index=True)
     
-    with st.expander("➕ Tambah / Update Tag"):
+    with st.expander("➕ Tambah / Update Tag (fitur edit/hapus tag masih perlu manual via file config)"):
         with st.form("conf_f", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1: n_name = st.text_input("Nama Tag (ex: ED)")

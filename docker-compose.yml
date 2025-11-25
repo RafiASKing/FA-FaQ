@@ -68,3 +68,22 @@ services:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
+
+  # --- 5. FRONTEND V2 (Port 8080) ---
+  faq-web-v2:
+    build: .
+    container_name: faq_web_v2
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - chroma-server
+    volumes:
+      - ./data:/app/data
+      - ./web_v2:/app/web_v2  # Mapping folder code v2
+    env_file: .env
+    environment:
+      - CHROMA_HOST=chroma-server
+      - CHROMA_PORT=8000
+    # Jalankan uvicorn mengarah ke folder web_v2
+    command: uvicorn web_v2.main:app --host 0.0.0.0 --port 8080

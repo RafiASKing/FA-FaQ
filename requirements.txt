@@ -9,3 +9,5 @@ requests
 # pysqlite3-binary PENTING untuk mengatasi limitasi SQLite lama di container Linux
 pysqlite3-binary; sys_platform == 'linux'
 watchdog
+jinja2
+python-multipart
