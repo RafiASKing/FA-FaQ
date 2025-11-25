@@ -9,12 +9,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # KITA GANTI MAPPINGNYA JADI /index_data
-      - ./data/chroma_data:/index_data
+      # KIRI: Folder Laptop (Tetap)
+      # KANAN: Folder Container (UBAH JADI /data)
+      - ./data/chroma_data:/data
     environment:
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/index_data  <-- KITA PAKSA TULIS DI SINI
       - ANONYMIZED_TELEMETRY=False
+      # Hapus baris PERSIST_DIRECTORY, biarkan dia pakai default /data
 
   # --- 2. WHATSAPP BOT (YANG HARUS MENGALAH) ---
   faq-bot:
