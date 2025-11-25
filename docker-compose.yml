@@ -1,17 +1,19 @@
 version: '3'
 
 services:
-  # --- 1. CHROMA DB SERVER (SI PUSTAKAWAN) ---
   chroma-server:
     image: chromadb/chroma:latest
     container_name: faq_chroma_server
     restart: always
     ports:
-      - "8000:8000"  # <-- Port 8000 Host : Port 8000 Container (JANGAN UBAH INI)
+      - "8000:8000"
     volumes:
+      # KIRI: Folder Laptop, KANAN: Folder Container
       - ./data/chroma_data:/chroma/chroma
     environment:
       - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma  # <--- INI KUNCINYA!!
+      - ANONYMIZED_TELEMETRY=False        # Biar gak kirim data ke pusat Chroma
 
   # --- 2. WHATSAPP BOT (YANG HARUS MENGALAH) ---
   faq-bot:
