@@ -6,15 +6,15 @@ def combine_files(root_dir, output_file, extensions):
     """
     # 1. Folder yang Harus Dikecualikan (Excluding Directories)
     # Ini akan mencegah os.walk menelusuri isi folder ini.
-    EXCLUDE_DIRS = ['venv', '.git', '__pycache__', 'node_modules', 'images', 'data', '.env', 'Dokumentasi.md'] 
+    EXCLUDE_DIRS = ['venv', '.git', '__pycache__', 'node_modules', 'images', 'data', '.env'] 
     
     # 2. File yang Harus Dikecualikan Meskipun Ekstensinya Cocok (Excluding Specific Files)
     # File data atau dokumen yang tidak relevan untuk LLM.
-    EXCLUDE_FILES = ['faq_data.xlsx', 'scriptjalanfiles.py', 'single_script_for_llm.txt'] # scriptjalanfiles.py diabaikan agar tidak menggabungkan dirinya sendiri
+    EXCLUDE_FILES = ['faq_data.xlsx', 'scriptjalanfiles.py', 'single_script_for_llm.txt','Dokumentasi.md','info_some_syntax.md'] # scriptjalanfiles.py diabaikan agar tidak menggabungkan dirinya sendiri
     
     # 3. Ekstensi File yang Diinginkan
     FILE_EXTENSIONS = [
-        '.py', '.toml', '.json', '.md', '.txt', 
+        '.py', '.toml', '.json', '.txt', 
         '.yml', '.yaml', # Dockerfile dan docker-compose tidak punya ekstensi, tapi .yml/yaml adalah relevan
     ] 
 
