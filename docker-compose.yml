@@ -15,24 +15,24 @@ services:
       - ANONYMIZED_TELEMETRY=False
 
 # --- 2. POSTGRES DATABASE ---
-  postgres:
+postgres:
     image: postgres:15-alpine
     container_name: faq_postgres
     restart: always
     environment:
-      POSTGRES_USER: evolution
-      POSTGRES_PASSWORD: evolutionpassword
+      POSTGRES_USER: postgres          # <--- Ubah jadi postgres
+      POSTGRES_PASSWORD: adminpassword # <--- Password simple
       POSTGRES_DB: evolution
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"] # <--- Cek user postgres
       interval: 5s
       timeout: 5s
       retries: 10
 
   # --- 3. EVOLUTION API (VERSI BARU v2.2.2) ---
-  evolution-api:
+evolution-api:
     image: atendai/evolution-api:v2.2.2
     container_name: faq_evolution
     restart: always
@@ -45,18 +45,13 @@ services:
       - ./evolution_instances:/evolution/instances
       - ./evolution_store:/evolution/store
     environment:
-      # --- BASIC CONFIG ---
       - SERVER_PORT=8081
       - SERVER_URL=http://43.218.92.10:8081
       - AUTHENTICATION_API_KEY=admin123
       - AUTHENTICATION_EXPOSE_IN_URL=true
-      
-      # --- DATABASE CONFIG (SIMPLIFIED) ---
-      # Kita paksa hanya pakai DATABASE_URL. Hapus DB_HOST, DB_USER, dll biar gak konflik.
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_URL=postgresql://evolution:evolutionpassword@faq_postgres:5432/evolution?schema=public
-      
-      # --- LOGGING ---
+      # URL pake user postgres
+      - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
       # Biar kalau error ketauan detailnya
       - LOG_LEVEL=warn
 
