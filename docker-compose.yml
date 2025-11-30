@@ -52,9 +52,10 @@ services:
       - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
       - DATABASE_PROVIDER=postgresql
       - SERVER_PORT=8081
-      - SERVER_URL=http://43.218.92.10:8081
+      - SERVER_URL=http://localhost:8081
       - AUTHENTICATION_API_KEY=admin123
       - AUTHENTICATION_EXPOSE_IN_URL=true
+      - LOG_LEVEL=DEBUG
 
   # --- 4. BOT WA ---
   faq-bot:
