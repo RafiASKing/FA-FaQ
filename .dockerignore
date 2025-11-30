@@ -8,3 +8,4 @@ data/chroma_data
 pycache
 *.pyc
 .DS_Store
+__pycache__
