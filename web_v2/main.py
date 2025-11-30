@@ -99,30 +99,6 @@ def process_content_to_html(text_markdown, img_path_str):
         html_content += "</div>"
 
     return html_content
-    
-    def replace_match(match):
-        try:
-            idx = int(match.group(1)) - 1
-            if 0 <= idx < len(img_list):
-                return f'''
-                <div class="img-container">
-                    <img src="{img_list[idx]}" alt="Gambar {idx+1}" loading="lazy" onclick="window.open(this.src, '_blank');">
-                    <span class="img-caption">Gambar {idx+1} (Klik untuk perbesar)</span>
-                </div>
-                '''
-            return ""
-        except: return ""
-
-    html_content = pattern.sub(replace_match, html_content)
-
-    # 4. Fallback Gallery (Jika gambar ada tapi tag tidak ditulis)
-    if "[GAMBAR" not in text_markdown.upper() and img_list:
-        html_content += "<hr class='img-divider'><div class='gallery-grid'>"
-        for img in img_list:
-             html_content += f'<div class="img-card"><img src="{img}" onclick="window.open(this.src, \'_blank\');"></div>'
-        html_content += "</div>"
-
-    return html_content
 
 # --- MAIN ENDPOINT ---
 @app.get("/", response_class=HTMLResponse)
