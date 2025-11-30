@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  # --- 1. CHROMA DB SERVER (TIDAK BERUBAH) ---
+  # --- 1. CHROMA DB ---
   chroma-server:
     image: chromadb/chroma:latest
     container_name: faq_chroma_server
@@ -14,7 +14,7 @@ services:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=False
 
-# --- 2. POSTGRES DATABASE ---
+  # --- 2. POSTGRES (NAME VOLUME BARU) ---
   postgres:
     image: postgres:15-alpine
     container_name: faq_postgres
@@ -24,17 +24,15 @@ services:
       POSTGRES_PASSWORD: adminpassword
       POSTGRES_DB: evolution
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      # GANTI NAMA FOLDER BIAR FRESH 100%
+      - ./postgres_data_fix:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # --- 3. EVOLUTION API (VERSI BARU v2.2.2) ---
-# ... (service postgres tetap sama)
-
-  # --- 3. EVOLUTION API (VERSI LENGKAP) ---
+  # --- 3. EVOLUTION API (CONFIG LENGKAP) ---
   evolution-api:
     image: atendai/evolution-api:v2.2.2
     container_name: faq_evolution
@@ -45,32 +43,29 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./evolution_instances:/evolution/instances
-      - ./evolution_store:/evolution/store
+      # GANTI NAMA FOLDER BIAR FRESH 100%
+      - ./evolution_instances_fix:/evolution/instances
+      - ./evolution_store_fix:/evolution/store
     environment:
       - SERVER_PORT=8081
       - SERVER_URL=http://43.218.92.10:8081
       - AUTHENTICATION_API_KEY=admin123
       - AUTHENTICATION_EXPOSE_IN_URL=true
       
-      # --- DATABASE CONFIGURATION ---
+      # --- DATABASE CONFIG (WAJIB LENGKAP) ---
+      # Kita suapi variabel satu per satu biar dia gak bingung
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
-      
-      # [PENTING] Variabel ini HARUS ADA agar script startup tidak error ke 'user'
       - DB_TYPE=postgres
       - DB_HOST=faq_postgres
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=adminpassword
       - DB_NAME=evolution
+      - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
       
       - LOG_LEVEL=warn
 
-  # ... (service lainnya tetap)
-
-
-  # --- 4. WHATSAPP BOT ---
+  # --- 4. BOT WA ---
   faq-bot:
     build: .
     container_name: faq_bot_wa
@@ -88,7 +83,7 @@ services:
       - EVO_API_KEY=admin123
     command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
 
-  # --- 5. USER APP (TIDAK BERUBAH) ---
+  # --- 5. USER APP ---
   faq-user:
     build: .
     container_name: faq_user_app
@@ -107,7 +102,7 @@ services:
       - CHROMA_PORT=8000
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
-  # --- 6. ADMIN APP (TIDAK BERUBAH) ---
+  # --- 6. ADMIN APP ---
   faq-admin:
     build: .
     container_name: faq_admin_app
@@ -126,7 +121,7 @@ services:
       - CHROMA_PORT=8000
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
 
-  # --- 7. FRONTEND V2 (TIDAK BERUBAH) ---
+  # --- 7. FRONTEND V2 ---
   faq-web-v2:
     build: .
     container_name: faq_web_v2
