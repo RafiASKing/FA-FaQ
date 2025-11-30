@@ -25,6 +25,12 @@ services:
       POSTGRES_DB: evolution
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+    # Healthcheck: Cek apakah DB sudah siap terima koneksi
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # --- 3. EVOLUTION API (LOGIC BARU) ---
   evolution-api:
@@ -34,7 +40,8 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy  # <--- HANYA JALAN KALAU DB SUDAH SEHAT
     volumes:
       - ./evolution_instances:/evolution/instances
       - ./evolution_store:/evolution/store
@@ -44,7 +51,7 @@ services:
       - SERVER_URL=http://43.218.92.10:8081
       # Ganti Provider ke POSTGRESQL
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_URL=postgresql://evolution:evolutionpassword@postgres:5432/evolution
+      - DATABASE_URL=postgresql://evolution:evolutionpassword@faq_postgres:5432/evolution
       - AUTHENTICATION_API_KEY=admin123
       - AUTHENTICATION_EXPOSE_IN_URL=true
 
