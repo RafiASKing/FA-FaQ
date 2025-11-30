@@ -471,7 +471,40 @@ Ini membuat jawaban kamu ke juri soal "Scalability" jadi valid.
 
 
 <dokumentasi_perjalanan_pengembangan_setelahnya_lagi4>
+Berikut adalah rekapitulasi lengkap perjalanan perubahan sistem kita (Changelog), mulai dari perbaikan UI Admin hingga transformasi total Web V2.
 
+Ini adalah ringkasan dari apa yang kita ubah, masalah yang mendasarinya, dan solusi teknis yang diterapkan.
+
+-----
+
+### 1\. Modul Admin (`admin.py`) - UI/UX & Safety
+
+| Area | Masalah (Problem) | Pertimbangan (Reasoning) | Solusi & Perubahan |
+| :--- | :--- | :--- | :--- |
+| **Tombol Hapus** | Tombol "Hapus Permanen" terlalu mencolok (merah/primary) dan posisinya sejajar dengan Update. Rawan salah klik. | Aksi destruktif (Hapus) harusnya lebih sulit diakses visualnya dibanding aksi produktif (Update). | **Visual Hierarchy Swap:**<br>• **Update:** Jadi tombol `primary` (Warna Merah/Orange Mencolok).<br>• **Hapus:** Jadi tombol `secondary` (Abu-abu/Putih).<br>• **Layout:** Diberi jarak (spacer) agar tidak nempel. |
+| **Hapus Tag** | Tidak ada fitur menghapus Tag. Admin takut ada data "yatim" (orphan) jika tag dihapus sembarangan. | Menghapus tag yang sedang dipakai oleh dokumen aktif akan merusak visual badge di sisi user (jadi abu-abu). | **Smart Delete (Dependency Check):**<br>• Menambahkan fitur hapus tag di "Zona Bahaya".<br>• **Logic:** Sistem menghitung dulu jumlah dokumen yg pakai tag itu.<br>• Jika `Count > 0`: Tombol hapus diblokir peringatan Merah.<br>• Jika `Count == 0`: Tombol hapus muncul (Aman). |
+
+-----
+
+### 2\. Modul Web V2 (`web_v2/`) - Transformasi Frontend
+
+Tujuan utama: Menghilangkan "Cold Start" Streamlit yang lambat, tapi tetap mempertahankan fitur visual yang kaya.
+
+| Fitur | Masalah Awal (Web V2 Lama) | Solusi & Perubahan (Web V2 Baru) |
+| :--- | :--- | :--- |
+| **User Interface** | Tampilan polos, teks mentah, tidak ada gambar, tidak interaktif. | **Porting UI Streamlit ke HTML/CSS:**<br>• Implementasi `style.css` untuk styling modern.<br>• Menggunakan tag `<details>` untuk efek **Accordion** (Gulungan) yang ringan.<br>• Mounting folder `/images` agar gambar bisa diakses browser. |
+| **Logic Pencarian** | Hanya menampilkan list flat tanpa batas yang jelas. | **Split Logic (Search vs Browse):**<br>• **Search Mode:** Hanya menampilkan **Top 3** hasil terbaik (Relevansi \> 32%).<br>• **Browse Mode:** Menampilkan **Top 10** data terbaru jika search bar kosong. |
+| **Navigasi** | Tidak ada paginasi, semua data numpuk atau terpotong. | **Pagination System:**<br>• Menambahkan tombol `Previous` / `Next`.<br>• Menambahkan indikator halaman (Halaman 1 dari X).<br>• Reset otomatis ke halaman 0 saat user melakukan pencarian baru. |
+| **Format Teks** | Tampilan List (1. 2. 3.) berantakan menjadi satu baris paragraf panjang. | **Advanced Markdown Parsing:**<br>• Menggunakan library `markdown` dengan ekstensi `nl2br` (Enter = Baris Baru).<br>• **Regex Pre-processing:** Memaksa teks agar memiliki *double enter* sebelum list angka/bullet, supaya parser membacanya sebagai list yang rapi. |
+| **Gambar** | Placeholder `[GAMBAR 1]` muncul sebagai teks biasa. | **Content Processor:**<br>• Membuat fungsi Python yang mendeteksi pola `[GAMBAR X]`.<br>• Menggantinya menjadi tag HTML `<img src="..." onclick="zoom">` secara otomatis. |
+
+-----
+
+### Kesimpulan Kondisi Sistem Sekarang
+
+1.  **Backend (ChromaDB + Logic):** Sangat stabil. Sudah aman dari isu *concurrency* (Database Locked) dan memiliki logika pencarian yang konsisten di semua platform (Bot, Web, Admin).
+2.  **Admin Panel:** Lebih aman (Safety check) dan ergonomis (Tombol update lebih jelas).
+3.  **Frontend User (Web V2):** Sekarang sudah **setara** dengan versi Streamlit dalam hal fitur visual, namun jauh lebih **cepat** (tanpa loading screen lama) karena menggunakan teknologi native web (FastAPI + Jinja2).
 </dokumentasi_perjalanan_pengembangan_setelahnya_lagi4>
 
 
@@ -479,7 +512,7 @@ Ini membuat jawaban kamu ke juri soal "Scalability" jadi valid.
 
 
 </next_pengembangan>
-Fixing masalah write db, aku masih bingung mau ngelakuin yang disuruh bagian "dokumentasi_perjalanan_pengembangan_setelahnya_lagi" apa tidak?
+WA
 </next_pengembangan>
 
 

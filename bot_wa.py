@@ -1,118 +1,261 @@
 import os
 import requests
 import uvicorn
+import re
+import base64
 from fastapi import FastAPI, Request, BackgroundTasks
 from dotenv import load_dotenv
-from src import database
+from src import database, utils
 
 # Load Environment Variables
 load_dotenv()
 
 app = FastAPI()
 
-# --- CONFIG ---
-FONNTE_TOKEN = os.getenv("FONNTE_TOKEN")
+# Konfigurasi WAHA (Diambil dari docker-compose)
+WAHA_BASE_URL = os.getenv("WAHA_BASE_URL", "http://waha:3000")
 
-if not FONNTE_TOKEN:
-    print("⚠️ WARNING: FONNTE_TOKEN belum diisi di .env!")
-
-def send_wa_reply(target, message):
-    """Kirim pesan balasan via Fonnte API"""
-    headers = {
-        "Authorization": FONNTE_TOKEN,
-    }
-    data = {
-        "target": target,
-        "message": message,
-    }
-
+def get_base64_image(file_path):
+    """
+    Mengubah file gambar lokal menjadi Base64 string
+    agar bisa dikirim lewat JSON ke WAHA (antar container).
+    """
     try:
-        # Fonnte API Endpoint
-        url = "https://api.fonnte.com/send"
-        resp = requests.post(url, headers=headers, data=data)
-        print(f"✅ [Fonnte] Sent to {target} | Status: {resp.status_code}")
+        # Bersihkan path (kadang ada ./images/...)
+        clean_path = file_path.replace("\\", "/")
+        if not os.path.exists(clean_path):
+            print(f"❌ Gambar tidak ditemukan: {clean_path}")
+            return None, None
+            
+        with open(clean_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            
+        # Tentukan mime type sederhana
+        mime_type = "image/jpeg"
+        if clean_path.lower().endswith(".png"):
+            mime_type = "image/png"
+            
+        # Format Data URI: "data:image/png;base64,....."
+        return f"data:{mime_type};base64,{encoded_string}", os.path.basename(clean_path)
     except Exception as e:
-        print(f"❌ [Fonnte] Error: {e}")
+        print(f"❌ Gagal encode gambar: {e}")
+        return None, None
 
-def process_logic(sender, incoming_msg):
+def send_waha_text(chat_id, text):
+    """Kirim Pesan Teks via WAHA"""
+    url = f"{WAHA_BASE_URL}/api/sendText"
+    payload = {
+        "chatId": chat_id,
+        "text": text,
+        "session": "default"
+    }
+    try:
+        r = requests.post(url, json=payload)
+        # print(f"📤 Sent Text to {chat_id}: {r.status_code}")
+    except Exception as e:
+        print(f"❌ Error Send Text: {e}")
+
+def send_waha_image(chat_id, file_path, caption=""):
+    """Kirim Gambar via WAHA (Base64 Mode)"""
+    url = f"{WAHA_BASE_URL}/api/sendImage"
+    
+    # Encode gambar dulu
+    data_uri, filename = get_base64_image(file_path)
+    
+    if not data_uri:
+        return # Skip jika gambar rusak/hilang
+
+    payload = {
+        "chatId": chat_id,
+        "file": {
+            "mimetype": data_uri.split(";")[0].split(":")[1],
+            "filename": filename,
+            "data": data_uri.split(",")[1] # Ambil base64-nya saja
+        },
+        "caption": caption,
+        "session": "default"
+    }
+    try:
+        r = requests.post(url, json=payload)
+        print(f"🖼️ Sent Image to {chat_id}: {r.status_code}")
+    except Exception as e:
+        print(f"❌ Error Send Image: {e}")
+
+def process_logic(chat_id, sender_name, message_body, is_group, has_mention):
     """
-    Logic Sederhana & Cepat:
-    1. Cek ada '@faq' gak? Kalau gak ada, ABORKAN.
-    2. Ambil teks sisanya sebagai query.
-    3. Cari Top 1 di Database.
-    4. Kirim Jawaban.
+    Otak Bot:
+    1. Cek apakah perlu merespon (DM / Mention).
+    2. Cari di Database.
+    3. Format Text & Gambar.
+    4. Kirim.
     """
     
-    # 1. VALIDASI TRIGGER
-    # Pakai lower() biar @FAQ atau @faq tetap masuk
-    if "@faq" not in incoming_msg.lower():
-        return # Skip, jangan diproses
-
-    # 2. BERSIHKAN QUERY
-    # Hapus @faq, sisa teksnya adalah query pencarian
-    query = incoming_msg.lower().replace("@faq", "").strip()
+    # === 1. LOGIKA TRIGGER (PENTING!) ===
+    should_reply = False
     
-    if not query:
-        send_wa_reply(sender, "⚠️ Silakan ketik pertanyaan setelah @faq.\nContoh: *@faq cara login nurse*")
+    if not is_group:
+        # Kalau Private Chat (PC), SELALU balas
+        should_reply = True
+    else:
+        # Kalau Group, HANYA balas jika di-mention ATAU ada keyword trigger
+        if has_mention:
+            should_reply = True
+        elif "@faq" in message_body.lower():
+            should_reply = True
+            
+    if not should_reply:
+        return # Abaikan chat ini
+
+    # Bersihkan pesan dari @mention atau @faq
+    # Biar query ke DB bersih
+    clean_query = message_body.replace("@faq", "").strip()
+    # (Opsional) Hapus mention tag WA style @628xxx
+    clean_query = re.sub(r'@\d+', '', clean_query).strip()
+
+    if not clean_query:
+        send_waha_text(chat_id, f"Halo kak {sender_name}, ada yang bisa dibantu? Ketik masalahnya ya.")
         return
 
-    print(f"🔍 Searching: '{query}' from {sender}")
+    print(f"🔍 Searching: '{clean_query}' for {chat_id}")
 
-    # 3. CARI DI DATABASE (Rank 1 Only)
-    # Filter selalu "Semua Modul" sesuai request
-    results = database.search_faq_for_bot(query, filter_tag="Semua Modul")
+    # === 2. CARI DI DATABASE ===
+    # Kita cari Top 1 saja biar bot fokus
+    results = database.search_faq_for_bot(clean_query, filter_tag="Semua Modul")
     
     reply_text = ""
-    
-    # Cek apakah ada hasil
+    list_gambar_to_send = []
+
     if not results or not results['ids'][0]:
-        reply_text = f"❌ Maaf, tidak ditemukan jawaban untuk: *'{query}'*\nCoba gunakan kata kunci lain."
+        # Tidak ketemu
+        reply_text = f"🙏 Maaf kak, saya belum punya jawaban untuk: *'{clean_query}'*.\nCoba kata kunci lain atau hubungi Admin."
+        send_waha_text(chat_id, reply_text)
+        return
     else:
-        # AMBIL RANK 1 (Paling Relevan)
+        # KETEMU!
         meta = results['metadatas'][0][0]
         dist = results['distances'][0][0]
-        score = max(0, (1 - dist) * 100) # Hitung skor persen
-        
-        # Format Jawaban: Judul & Isi
-        reply_text += f"🤖 *FAQ Assistant* (Akurasi: {score:.0f}%)\n\n"
-        reply_text += f"📂 Modul: *{meta['tag']}*\n"
-        reply_text += f"❓ Tanya: *{meta['judul']}*\n"
-        reply_text += f"✅ Jawab: \n{meta['jawaban_tampil']}\n"
-        
-        # Cek Gambar
-        if meta.get('path_gambar') and str(meta.get('path_gambar')).lower() != 'none':
-            reply_text += "\n🖼️ *[Ada Gambar]* Cek aplikasi Web untuk visual detail."
-            
-        # Cek Sumber URL
-        if meta.get('sumber_url'):
-            reply_text += f"\n🔗 Sumber: {meta.get('sumber_url')}"
+        score = max(0, (1 - dist) * 100)
 
-    # 4. KIRIM BALASAN
-    send_wa_reply(sender, reply_text)
+        # Cek Score Kelayakan
+        if score < 60: # Kalau relevansi rendah (bisa diatur)
+             reply_text = f"🤔 Kurang yakin, tapi mungkin ini maksudnya (Relevansi {score:.0f}%):\n\n"
+        else:
+             reply_text = f"🤖 *FAQ Assistant* (Akurasi: {score:.0f}%)\n\n"
 
-@app.get("/")
-def home():
-    return {"status": "running", "mode": "Simple Bot @faq"}
+        judul = meta['judul']
+        jawaban_raw = meta['jawaban_tampil']
+        
+        # === 3. PROCESSING GAMBAR (REQUEST KAMU) ===
+        # Kita scan dulu apakah ada [GAMBAR X]
+        
+        # A. Ambil path gambar asli dari DB
+        raw_paths = meta.get('path_gambar', 'none')
+        img_db_list = []
+        if raw_paths and str(raw_paths).lower() != 'none':
+             # Split path (./images/ED/bla.png)
+             paths = raw_paths.split(';')
+             for p in paths:
+                 clean_p = p.strip().replace("\\", "/")
+                 img_db_list.append(clean_p)
+
+        # B. Ganti Teks [GAMBAR X] -> (Lihat Gambar X)
+        # Fungsi regex replacer
+        def replace_tag(match):
+            try:
+                # match.group(1) adalah angkanya (misal "1")
+                idx = int(match.group(1)) - 1
+                if 0 <= idx < len(img_db_list):
+                    # Masukkan ke antrian kirim
+                    list_gambar_to_send.append(img_db_list[idx])
+                    return f"*( 👇 Lihat Gambar {idx+1} di bawah )*"
+                else:
+                    return ""
+            except: return ""
+
+        # Lakukan replacement di teks jawaban
+        jawaban_processed = re.sub(r'\[GAMBAR\s*(\d+)\]', replace_tag, jawaban_raw, flags=re.IGNORECASE)
+        
+        # C. Jika ada gambar tapi tidak ada tag di teks, kirim semua sebagai lampiran
+        if not list_gambar_to_send and img_db_list:
+            list_gambar_to_send = img_db_list
+
+        # Susun Pesan Akhir
+        reply_text += f"❓ *{judul}*\n"
+        reply_text += f"✅ {jawaban_processed}\n"
+        
+        if meta.get('sumber_url') and len(meta.get('sumber_url')) > 3:
+            reply_text += f"\n🔗 {meta.get('sumber_url')}"
+
+        # === 4. KIRIM (TEKS DULU, BARU GAMBAR) ===
+        send_waha_text(chat_id, reply_text)
+        
+        # Kirim Gambar (Looping)
+        for i, img_path in enumerate(list_gambar_to_send):
+            # Cek path lokal container
+            # (Pastikan di docker-compose folder ./images sudah dimount ke /app/images)
+            send_waha_image(chat_id, img_path, caption=f"Gambar Pendukung #{i+1}")
+
 
 @app.post("/webhook")
-async def fonnte_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Jalur masuk pesan dari Fonnte"""
+async def waha_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Webhook handler untuk WAHA.
+    Menerima event 'message' dari WAHA.
+    """
     try:
         body = await request.json()
         
-        sender = body.get("sender")
-        message = body.get("message")
-        
-        # Pastikan pesan valid & bukan status update dari device sendiri
-        if sender and message and body.get("device_status") != "connect":
-            # Jalankan di background biar Fonnte ga nunggu loading
-            background_tasks.add_task(process_logic, sender, message)
+        # Struktur WAHA biasanya: { "event": "message", "payload": { ... } }
+        event_type = body.get("event")
+        payload = body.get("payload", {})
+
+        # Pastikan ini event pesan baru (bukan status update/ack)
+        # 'message' atau 'message.upsert' tergantung versi WAHA, kita handle umum
+        if event_type == "message":
+            
+            # Abaikan pesan dari status broadcast
+            if payload.get("from") == "status@broadcast":
+                return {"status": "ignored_status"}
+            
+            # Abaikan pesan dari diri sendiri (Bot)
+            if payload.get("fromMe"):
+                return {"status": "ignored_self"}
+
+            # Ekstrak Data Penting
+            chat_id = payload.get("from") # ID Pengirim (bisa group id atau user id)
+            sender_name = payload.get("_data", {}).get("notifyName", "User")
+            message_body = payload.get("body", "")
+            
+            # Cek Grup / Mention
+            # isGroup bisa boolean true/false atau undefined
+            is_group = "@g.us" in chat_id 
+            
+            # Cek Mention (WAHA kasih list mentionedIds)
+            mentioned_ids = payload.get("mentionedIds", [])
+            # Cek apakah bot saya (nomor WA yang dipasang) ada di list mention?
+            # Cara gampang: kalau list mention gak kosong, anggap aja dimention (simplifikasi)
+            # Atau cek logic WAHA 'hasMention' kalau ada (tergantung versi)
+            has_mention = len(mentioned_ids) > 0 
+
+            # Jalankan logic di background biar webhook fast response
+            background_tasks.add_task(
+                process_logic, 
+                chat_id, 
+                sender_name, 
+                message_body, 
+                is_group, 
+                has_mention
+            )
             
         return {"status": "ok"}
+        
     except Exception as e:
-        print(f"Error Webhook: {e}")
+        print(f"Webhook Error: {e}")
         return {"status": "error"}
 
+@app.get("/")
+def home():
+    return {"status": "WAHA Bot Running", "mode": "Direct Connection"}
+
 if __name__ == "__main__":
-    # Port 8000 (Internal Container)
     uvicorn.run("bot_wa:app", host="0.0.0.0", port=8000)

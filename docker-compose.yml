@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-# --- 1. CHROMA DB SERVER ---
+  # --- 1. CHROMA DB SERVER (TIDAK BERUBAH) ---
   chroma-server:
     image: chromadb/chroma:latest
     container_name: faq_chroma_server
@@ -9,33 +9,47 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # KIRI: Folder Laptop (Tetap)
-      # KANAN: Folder Container (UBAH JADI /data)
       - ./data/chroma_data:/data
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=False
-      # Hapus baris PERSIST_DIRECTORY, biarkan dia pakai default /data
 
-  # --- 2. WHATSAPP BOT (YANG HARUS MENGALAH) ---
+  # --- 2. WAHA (WHATSAPP API) - BARU! ---
+  waha:
+    image: devlikepro/waha:latest
+    container_name: faq_waha
+    restart: always
+    ports:
+      - "3000:3000"  # Dashboard WAHA bisa dibuka di localhost:3000
+    environment:
+      # Menggunakan engine WEBJS (paling stabil untuk fitur dasar)
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WHATSAPP_SWAGGER_USERNAME=admin
+      - WHATSAPP_SWAGGER_PASSWORD=admin
+      - WAHA_LOG_LEVEL=info
+    volumes:
+      # Menyimpan sesi login WA agar tidak perlu scan QR ulang saat restart
+      - ./waha_data:/app/.waha
+
+  # --- 3. WHATSAPP BOT (LOGIC PYTHON) - DIUPDATE ---
   faq-bot:
     build: .
     container_name: faq_bot_wa
     restart: always
     ports:
-      # KIRI = Pintu di Laptop Kamu (Host)
-      # KANAN = Pintu di dalem Container (Code Python)
-      - "8005:8000"  # <--- UBAH KIRI JADI 8005!
+      - "8005:8000"
     depends_on:
       - chroma-server
+      - waha  # Bot harus menunggu WAHA siap
     env_file: .env
     environment:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
-    # Command tetap jalan di port 8000 container, tapi diakses dari luar via 8005
+      - WAHA_BASE_URL=http://waha:3000 # URL internal antar container
+    # Kita tetap pakai uvicorn untuk webhook handler
     command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
 
-  # --- 3. USER APP ---
+  # --- 4. USER APP (TIDAK BERUBAH) ---
   faq-user:
     build: .
     container_name: faq_user_app
@@ -50,11 +64,11 @@ services:
       - ./.streamlit:/app/.streamlit
     env_file: .env
     environment:
-      - CHROMA_HOST=chroma-server # Nunjuk ke nama service di atas
+      - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
 
-  # --- 4. ADMIN APP ---
+  # --- 5. ADMIN APP (TIDAK BERUBAH) ---
   faq-admin:
     build: .
     container_name: faq_admin_app
@@ -73,7 +87,7 @@ services:
       - CHROMA_PORT=8000
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
 
-  # --- 5. FRONTEND V2 (Port 8080) ---
+  # --- 6. FRONTEND V2 (TIDAK BERUBAH) ---
   faq-web-v2:
     build: .
     container_name: faq_web_v2
@@ -84,10 +98,9 @@ services:
       - chroma-server
     volumes:
       - ./data:/app/data
-      - ./web_v2:/app/web_v2  # Mapping folder code v2
+      - ./web_v2:/app/web_v2
     env_file: .env
     environment:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
-    # Jalankan uvicorn mengarah ke folder web_v2
     command: uvicorn web_v2.main:app --host 0.0.0.0 --port 8080
