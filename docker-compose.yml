@@ -33,8 +33,10 @@ services:
       retries: 10
 
   # --- 3. EVOLUTION API ---
+# --- 3. EVOLUTION API ---
   evolution-api:
-    image: atendai/evolution-api:latest
+    # CHANGE THIS LINE to the new official repo:
+    image: evolutionapi/evolution-api:v2.3.1
     container_name: faq_evolution
     restart: always
     ports:
@@ -43,15 +45,10 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      # --- [SOLUSI SENIOR] MOUNT FILE ENV ---
-      # Ini akan menimpa file default di dalam container dengan file kita
       - ./evolution.env:/evolution/.env
-      
-      # VOLUME DATA V5
       - ./evolution_instances_v5:/evolution/instances
       - ./evolution_store_v5:/evolution/store
     environment:
-      # Kita tetap pasang env vars disini sebagai cadangan
       - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
       - DATABASE_PROVIDER=postgresql
       - SERVER_PORT=8081
