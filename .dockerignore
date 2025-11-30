@@ -1,11 +1,14 @@
-postgres_data
-evolution_store
-evolution_instances
-waha_data
+# --- DATABASE & VOLUMES (Wajib Ignore Wildcard) ---
+postgres_data*
+evolution_store*
+evolution_instances*
+waha_data*
 data/chroma_data
+
+# --- SYSTEM & GIT ---
 .git
 .gitignore
-pycache
+__pycache__
 *.pyc
 .DS_Store
-__pycache__
+.env
