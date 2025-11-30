@@ -36,7 +36,7 @@ services:
 # --- 3. EVOLUTION API ---
   evolution-api:
     # CHANGE THIS LINE to the new official repo:
-    image: evolutionapi/evolution-api:v2.3.1
+    image: atendai/evolution-api:v2.3.6
     container_name: faq_evolution
     restart: always
     ports:
