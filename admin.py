@@ -308,7 +308,7 @@ with tab4:
                     st.warning("Nama Tag wajib diisi.")
 
     # --- BAGIAN 2: HAPUS TAG (REQUEST KAMU) ---
-    with st.expander("🗑️ Hapus Tag (Zona Bahaya)", expanded=False):
+    with st.expander("🗑️ Hapus Tag ", expanded=False):
         st.markdown("### Hapus Tag dari Sistem")
         
         # Dropdown pilih tag yg mau dihapus
