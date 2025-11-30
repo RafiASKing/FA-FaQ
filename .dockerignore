@@ -1,0 +1,10 @@
+postgres_data
+evolution_store
+evolution_instances
+waha_data
+data/chroma_data
+.git
+.gitignore
+pycache
+*.pyc
+.DS_Store
