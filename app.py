@@ -6,7 +6,7 @@ import warnings
 from src import database, utils
 
 # --- 1. CONFIG & SUPPRESS WARNINGS ---
-st.set_page_config(page_title="Siloam Knowledge Base", page_icon="🏥", layout="centered")
+st.set_page_config(page_title="Hospital Knowledge Base", page_icon="🏥", layout="centered")
 
 # Matikan warning deprecation
 # (Kode lama dihapus karena sudah tidak supported di Streamlit baru)
