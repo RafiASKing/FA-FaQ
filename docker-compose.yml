@@ -31,6 +31,7 @@ services:
       # Token & Sesi
       - ./wpp_tokens:/home/wppconnect/tokens
       - ./wpp_sessions:/home/wppconnect/userData
+      - ./wpp_sessions/config.json:/home/wppconnect/config.json
   # --- 4. BOT WA ---
   faq-bot:
     build: .
