@@ -13,7 +13,6 @@ services:
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=False
-
   # --- 2. POSTGRES DATABASE ---
   postgres:
     image: postgres:15-alpine
@@ -31,9 +30,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
   # --- 3. EVOLUTION API ---
-# --- 3. EVOLUTION API ---
   evolution-api:
     image: evoapicloud/evolution-api:latest
     container_name: faq_evolution
@@ -58,7 +55,6 @@ services:
       - LOG_LEVEL=DEBUG
     env_file:
       - evolution.env
-
   # --- 4. BOT WA ---
   faq-bot:
     build: .
@@ -76,7 +72,6 @@ services:
       - EVO_BASE_URL=http://evolution-api:8081
       - EVO_API_KEY=admin123
     command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
-
   # --- 5. USER APP ---
   faq-user:
     build: .
@@ -95,7 +90,6 @@ services:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
-
   # --- 6. ADMIN APP ---
   faq-admin:
     build: .
@@ -114,7 +108,6 @@ services:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
     command: streamlit run admin.py --server.port=8502 --server.address=0.0.0.0
-
   # --- 7. FRONTEND V2 ---
   faq-web-v2:
     build: .
