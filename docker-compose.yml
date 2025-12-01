@@ -13,48 +13,23 @@ services:
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=False
-  # --- 2. POSTGRES DATABASE ---
-  postgres:
-    image: postgres:15-alpine
-    container_name: faq_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: adminpassword
-      POSTGRES_DB: evolution
-    volumes:
-      # GANTI KE V5 (Clean Start Otomatis)
-      - ./postgres_data_v5:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-  # --- 3. EVOLUTION API ---
-  evolution-api:
-    image: evoapicloud/evolution-api:latest
-    container_name: faq_evolution
+  # --- 2. EVOLUTION API ---
+  wppconnect:
+    container_name: faq_wppconnect
+    image: wppconnect/server:latest
     restart: always
     ports:
-      - "8081:8081"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./evolution.env:/evolution/.env
-      - ./evolution_instances_v5:/evolution/instances
-      - ./evolution_store_v5:/evolution/store
+      - "21465:21465" # Port default WPPConnect
     environment:
-      - SERVER_TYPE=http    # <--- ADD THIS HERE TOO
-      - DATABASE_URL=postgresql://postgres:adminpassword@faq_postgres:5432/evolution?schema=public
-      - DATABASE_PROVIDER=postgresql
-      - SERVER_PORT=8081
-      - SERVER_URL=http://localhost:8081
-      - AUTHENTICATION_API_KEY=admin123
-      - AUTHENTICATION_EXPOSE_IN_URL=true
-      - LOG_LEVEL=DEBUG
-    env_file:
-      - evolution.env
+      # Token rahasia buat akses API (Bebas ganti)
+      SECRET_KEY: admin123
+      LOG_LEVEL: info 
+    volumes:
+      # Simpan sesi biar kalau restart gak perlu scan ulang
+      - ./wpp_tokens:/home/wppconnect/tokens
+      - ./wpp_sessions:/home/wppconnect/userData
+    networks:
+      default: null
   # --- 4. BOT WA ---
   faq-bot:
     build: .
@@ -63,14 +38,16 @@ services:
     ports:
       - "8005:8000"
     depends_on:
-      - chroma-server
-      - evolution-api
+      chroma-server:
+        condition: service_started
+      wppconnect:
+        condition: service_started
     env_file: .env
     environment:
       - CHROMA_HOST=chroma-server
       - CHROMA_PORT=8000
-      - EVO_BASE_URL=http://evolution-api:8081
-      - EVO_API_KEY=admin123
+      - WA_BASE_URL=http://wppconnect:21465
+      - WA_SESSION_KEY=admin123
     command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
   # --- 5. USER APP ---
   faq-user:
