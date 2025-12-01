@@ -56,6 +56,8 @@ services:
       - AUTHENTICATION_API_KEY=admin123
       - AUTHENTICATION_EXPOSE_IN_URL=true
       - LOG_LEVEL=DEBUG
+    env_file:
+      - evolution.env
 
   # --- 4. BOT WA ---
   faq-bot:
