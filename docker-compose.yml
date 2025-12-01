@@ -16,20 +16,21 @@ services:
   # --- 2. EVOLUTION API ---
   wppconnect:
     container_name: faq_wppconnect
-    image: wppconnect/server:latest
+    # --- SOLUSI ANTI ERROR DOCKER HUB ---
+    # Kita tidak download image, tapi BUILD langsung dari GitHub WPPConnect Resmi.
+    # Ini akan download source code dan compile otomatis.
+    build: https://github.com/wppconnect-team/wppconnect-server.git
+    
     restart: always
     ports:
-      - "21465:21465" # Port default WPPConnect
+      - "21465:21465"
     environment:
-      # Token rahasia buat akses API (Bebas ganti)
       SECRET_KEY: admin123
-      LOG_LEVEL: info 
+      LOG_LEVEL: info
     volumes:
-      # Simpan sesi biar kalau restart gak perlu scan ulang
+      # Token & Sesi
       - ./wpp_tokens:/home/wppconnect/tokens
       - ./wpp_sessions:/home/wppconnect/userData
-    networks:
-      default: null
   # --- 4. BOT WA ---
   faq-bot:
     build: .
