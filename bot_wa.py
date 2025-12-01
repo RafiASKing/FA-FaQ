@@ -23,15 +23,20 @@ WA_SESSION_NAME = "mysession"
 
 # Variable Global
 CURRENT_TOKEN = None
-# --- UPDATE DI SINI: NOMOR BOT HARDCODED ---
-# Agar logika filter mention langsung jalan tanpa perlu fetch ke API
-MY_NUMBER = "6281311933544"
+
+# --- UPDATE PENTING DI SINI ---
+# Kita pakai LIST (Daftar), bukan cuma satu nomor.
+# Masukkan Nomor HP dan ID LID (yang muncul di log error tadi)
+MY_IDENTITIES = [
+    "6281311933544",   # Nomor HP Asli
+    "244268396482699"  # ID Device/LID (Yang muncul di log tadi)
+]
 
 # --- FUNGSI LOGGING ---
 def log(message):
     print(message, flush=True)
 
-# --- FUNGSI AUTH & IDENTITY ---
+# --- FUNGSI AUTH ---
 def get_headers():
     global CURRENT_TOKEN
     if not CURRENT_TOKEN:
@@ -54,30 +59,9 @@ def generate_token():
             if token:
                 CURRENT_TOKEN = token
                 log(f"✅ Berhasil Generate Token.")
-                # Kita tetap coba fetch data terbaru, tapi kalau gagal, kita pakai MY_NUMBER yg hardcoded
-                fetch_my_number()
             else: log(f"❌ Gagal Parse Token.")
         else: log(f"❌ Gagal Generate Token: {r.status_code}")
     except Exception as e: log(f"❌ Error Auth: {e}")
-
-def fetch_my_number():
-    global MY_NUMBER
-    try:
-        # Minta info device ke WPPConnect
-        url = f"{WA_BASE_URL}/api/{WA_SESSION_NAME}/host-device"
-        r = requests.get(url, headers=get_headers())
-        if r.status_code == 200:
-            data = r.json().get("response", {})
-            wid = data.get("wid", {}).get("user")
-            if wid:
-                MY_NUMBER = wid
-                log(f"🤖 Bot mengenali dirinya (Updated from API): {MY_NUMBER}")
-            else:
-                log(f"⚠️ API Fetch kosong. Menggunakan nomor hardcoded: {MY_NUMBER}")
-        else:
-            log(f"⚠️ Gagal fetch host-device ({r.status_code}). Menggunakan nomor hardcoded: {MY_NUMBER}")
-    except Exception as e:
-        log(f"⚠️ Error fetch identity: {e}. Menggunakan nomor hardcoded: {MY_NUMBER}")
 
 # --- FUNGSI UTILITY ---
 def get_base64_image(file_path):
@@ -118,25 +102,25 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
     should_reply = False
     
     if not is_group:
-        # Chat Pribadi: Selalu balas
         should_reply = True
     else:
-        # Grup Logic
         # 1. Cek keyword global
         if "@faq" in message_body.lower():
             should_reply = True
         
-        # 2. Cek apakah saya (Bot) di-tag
-        # Logic: Cek apakah MY_NUMBER (62813...) ada di dalam salah satu ID yang dimention
+        # 2. Cek Mention (LOGIKA BARU: SUPPORT BANYAK ID)
         if mentioned_list:
             for mentioned_id in mentioned_list:
-                if str(MY_NUMBER) in str(mentioned_id):
-                    should_reply = True
-                    log("🔔 Saya di-tag! Membalas...")
-                    break
+                # Cek apakah ID yang di-mention ada di dalam daftar identitas kita
+                for my_id in MY_IDENTITIES:
+                    if str(my_id) in str(mentioned_id):
+                        should_reply = True
+                        log(f"🔔 Saya di-tag (via ID: {my_id})! Membalas...")
+                        break
+                if should_reply: break
             
             if not should_reply:
-                log(f"⚠️ Ada tag di grup, tapi bukan ke saya ({MY_NUMBER}). Cuekin.")
+                log(f"⚠️ Ada tag di grup, tapi bukan ke saya {MY_IDENTITIES}. Cuekin.")
         
         if not should_reply and not mentioned_list:
              log("⚠️ Chat grup biasa tanpa tag/keyword. Cuekin.")
@@ -144,7 +128,12 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
     if not should_reply: return
 
     # --- PROSES DATABASE ---
-    clean_query = message_body.replace("@faq", "").strip()
+    # Bersihkan semua kemungkinan tag dari query
+    clean_query = message_body.replace("@faq", "")
+    for identity in MY_IDENTITIES:
+        clean_query = clean_query.replace(f"@{identity}", "") # Hapus tag nomor/id
+    
+    # Hapus sisa-sisa karakter aneh
     clean_query = re.sub(r'@\d+', '', clean_query).strip()
 
     if not clean_query:
@@ -229,7 +218,7 @@ async def wpp_webhook(request: Request, background_tasks: BackgroundTasks):
 
 @app.on_event("startup")
 async def startup_event():
-    log(f"🚀 Bot WA Start! Identity Hardcoded: {MY_NUMBER}")
+    log(f"🚀 Bot WA Start! Identities: {MY_IDENTITIES}")
     generate_token()
     try:
         requests.post(
