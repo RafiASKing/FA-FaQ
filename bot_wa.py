@@ -79,11 +79,24 @@ def send_wpp_text(phone, message):
         return
 
     url = f"{WA_BASE_URL}/api/{WA_SESSION_NAME}/send-message"
-    payload = {"phone": phone, "message": message, "isGroup": False}
+    
+    # --- PERBAIKAN: Deteksi Grup Otomatis ---
+    # Jika nomor mengandung @g.us, set isGroup = True
+    is_group_msg = "@g.us" in str(phone)
+    
+    payload = {
+        "phone": phone, 
+        "message": message, 
+        "isGroup": is_group_msg
+    }
+    
     try:
         r = requests.post(url, json=payload, headers=get_headers())
         log(f"📤 Balas ke {phone}: {r.status_code}")
-        if r.status_code == 401:
+        
+        if r.status_code == 400:
+            log(f"❌ Gagal 400 (Bad Request). Cek Payload: {json.dumps(payload)}")
+        elif r.status_code == 401:
             log("🔄 Token Expired/Salah. Regenerating...")
             generate_token()
     except Exception as e:
@@ -94,10 +107,20 @@ def send_wpp_image(phone, file_path, caption=""):
     url = f"{WA_BASE_URL}/api/{WA_SESSION_NAME}/send-image"
     base64_str, _ = get_base64_image(file_path)
     if not base64_str: return
-    payload = {"phone": phone, "base64": base64_str, "caption": caption, "isGroup": False}
+    
+    # --- PERBAIKAN: Deteksi Grup Otomatis ---
+    is_group_msg = "@g.us" in str(phone)
+
+    payload = {
+        "phone": phone, 
+        "base64": base64_str, 
+        "caption": caption, 
+        "isGroup": is_group_msg
+    }
+    
     try:
-        requests.post(url, json=payload, headers=get_headers())
-        log(f"🖼️ Kirim Gambar ke {phone}")
+        r = requests.post(url, json=payload, headers=get_headers())
+        log(f"🖼️ Kirim Gambar ke {phone}: {r.status_code}")
     except Exception as e:
         log(f"❌ Error Kirim Gambar: {e}")
 
@@ -181,7 +204,6 @@ async def wpp_webhook(request: Request, background_tasks: BackgroundTasks):
         if event not in ["onMessage", "onAnyMessage", "onmessage"]:
             return {"status": "ignored_event"}
 
-        # --- PERBAIKAN UTAMA DI SINI ---
         # Cek apakah 'data' ada. Jika tidak, pakai 'body' (root) sebagai data.
         data = body.get("data")
         if not data:
