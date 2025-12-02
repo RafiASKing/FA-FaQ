@@ -174,9 +174,9 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
     
     # --- UPGRADE 2: HEADER CLEAN & OBJEKTIF ---
     if score >= 60:
-        header = f"*Relevansi: {score:.0f}%*\n"
+        header = f"Relevansi: {score:.0f}%\n"
     else:
-        header = f"*[Relevansi Rendah: {score:.0f}%]*\n" 
+        header = f"[Relevansi Rendah: {score:.0f}%]\n" 
 
     judul = meta['judul']
     jawaban_raw = meta['jawaban_tampil']
@@ -193,7 +193,7 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
             idx = int(match.group(1)) - 1
             if 0 <= idx < len(img_db_list):
                 list_gambar_to_send.append(img_db_list[idx])
-                return f"*( 👇 Lihat Gambar {idx+1} )*"
+                return f"*(Lihat Gambar {idx+1})*"
             return ""
         except: return ""
 
@@ -225,9 +225,9 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
 
     # --- UPGRADE 3: Footer Bubble Terpisah ---
     footer_text = "------------------------------\n"
-    footer_text += "Bukan jawaban yang dimaksud?\n\n"
-    footer_text += f"1. Cek FaQs dan SOPs Lengkap: {WEB_V2_URL}\n"
-    footer_text += "2. Atau gunakan *kalimat* lebih spesifik beserta nama modulnya (misal: IGD/ED/IPD).\n"
+    footer_text += "Jika bukan ini jawaban yang dimaksud:\n\n"
+    footer_text += f"1. Cek Library Lengkap: {WEB_V2_URL}\n"
+    footer_text += "2. Atau gunakan *kalimat* spesifik beserta nama modul/topik (misal: IPD/ED/Jadwal).\n"
     footer_text += "Contoh: \n\"Gimana cara edit obat di EMR ED Pharmacy?\""
     
     time.sleep(0.5)
