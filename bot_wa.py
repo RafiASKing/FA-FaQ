@@ -202,9 +202,7 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
 
     # Susun Bubble Utama
     final_text = f"{header}\n"
-    final_text += f"Pertanyaan / Topik:\n"
     final_text += f"*{judul}*\n\n"
-    final_text += f"Jawaban / Penjelasan:\n"
     final_text += f"{jawaban_processed}"
     
     # Sumber (Clean Note)
@@ -229,8 +227,8 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
     footer_text = "------------------------------\n"
     footer_text += "Bukan jawaban yang dimaksud?\n\n"
     footer_text += f"1. Cek FaQs dan SOPs Lengkap: {WEB_V2_URL}\n"
-    footer_text += "2. Atau gunakan *kalimat lebih spesifik* beserta nama modul (ex: IGD/ED/IPD).\n"
-    footer_text += "Contoh: \"Gimana cara edit obat di EMR ED Pharmacy?\""
+    footer_text += "2. Atau gunakan *kalimat* lebih spesifik beserta nama modulnya (misal: IGD/ED/IPD).\n"
+    footer_text += "Contoh: \n\"Gimana cara edit obat di EMR ED Pharmacy?\""
     
     time.sleep(0.5)
     send_wpp_text(remote_jid, footer_text)
