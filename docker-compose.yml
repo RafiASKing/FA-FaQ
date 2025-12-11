@@ -51,6 +51,9 @@ services:
       - WA_BASE_URL=http://wppconnect:21465
       - WA_SESSION_KEY=THISISMYSECURETOKEN
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
     command: uvicorn bot_wa:app --host 0.0.0.0 --port 8000
   # --- 5. USER APP ---
   faq-user:
@@ -100,6 +103,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./web_v2:/app/web_v2
+      - ./images:/app/images
     env_file: .env
     environment:
       - CHROMA_HOST=chroma-server

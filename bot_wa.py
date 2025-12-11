@@ -22,7 +22,7 @@ WA_SECRET_KEY = os.getenv("WA_SESSION_KEY", "THISISMYSECURETOKEN")
 WA_SESSION_NAME = "mysession"
 
 # Ganti dengan IP/Domain Web V2 kamu
-WEB_V2_URL = "http://43.218.92.10:8080/" 
+WEB_V2_URL = "https://faq-assist.cloud/" 
 
 # --- LOAD IDENTITIES DARI .ENV ---
 # Pastikan di .env sudah ada: BOT_IDENTITIES=628xxx,244xxx
