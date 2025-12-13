@@ -141,8 +141,8 @@ if query:
             dist = raw['distances'][0][i]
             score = max(0, (1 - dist) * 100)
             
-            # 1. TETAPKAN SYARAT MINIMUM 32%
-            if score > 32:
+            # 1. TETAPKAN SYARAT MINIMUM 41%
+            if score > 41:
                 meta['score'] = score
                 results.append(meta)
         
@@ -177,7 +177,7 @@ if not page_data:
         except: pass
         
         # === CALL TO ACTION (WA BOT) ===
-        st.warning(f"❌ Tidak ditemukan hasil yang relevan (Relevansi < 32%).")
+        st.warning(f"❌ Tidak ditemukan hasil yang relevan (Relevansi < 41%).")
         
         st.markdown("""
         ### 🧐 Belum ada solusinya?
@@ -237,12 +237,12 @@ else:
                 # 50% - 80%: "Ijo Muda" (Green biasa/tipis)
                 score_md = f":green[({sc:.0f}% Relevansi)]"
             
-            elif sc > 36:
-                # 37% - 50%: Orange
+            elif sc > 41:
+                # 42% - 50%: Orange
                 score_md = f":orange[({sc:.0f}% Relevansi)]"
             
             else:
-                # 32% - 36%: Merah
+                # 41% - 36%: Merah
                 score_md = f":red[({sc:.0f}% Relevansi)]"
             
         label = f":{badge_color}-background[{tag}] **{item.get('judul')}** {score_md}"

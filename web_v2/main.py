@@ -126,8 +126,8 @@ async def read_root(request: Request, q: str = "", tag: str = "Semua Modul", pag
                 dist = raw['distances'][0][i]
                 score = max(0, (1 - dist) * 100)
                 
-                # Syarat Relevansi > 32%
-                if score > 32:
+                # Syarat Relevansi > 41%
+                if score > 41:
                     meta['score'] = int(score)
                     if score > 80: meta['score_class'] = "score-high"
                     elif score > 50: meta['score_class'] = "score-med"

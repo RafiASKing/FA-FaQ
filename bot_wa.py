@@ -9,7 +9,7 @@ import sys
 import time
 from fastapi import FastAPI, Request, BackgroundTasks
 from dotenv import load_dotenv
-from src import database
+from src import database, utils
 
 # Load Environment Variables
 load_dotenv()
@@ -171,7 +171,15 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
 
     meta = results['metadatas'][0][0]
     score = max(0, (1 - results['distances'][0][0]) * 100)
-    
+        
+    if score < 41: 
+        # 1. Catat ke CSV biar muncul di Admin Panel (Analytics)
+        utils.log_failed_search(clean_query)
+        
+        # 2. Balas User
+        send_wpp_text(remote_jid, "Maaf, belum ada data yang cocok. Coba tanya lebih spesifik.")
+        return
+        
     # --- UPGRADE 2: HEADER CLEAN & OBJEKTIF ---
     if score >= 60:
         header = f"Relevansi: {score:.0f}%\n"

@@ -6,7 +6,7 @@ Hospital's knowledge-base platform for SOPs, FAQs, and omnichannel support. It p
 ## ✨ Highlight Features
 | Area | Capability | References |
 | --- | --- | --- |
-| Core Search | Hybrid **Search Mode** (Top-3, score > 32%) & **Browse Mode** (10 latest, paginated). | [`app.py`](app.py), [`web_v2/main.py`](web_v2/main.py) |
+| Core Search | Hybrid **Search Mode** (Top-3, score > 41%) & **Browse Mode** (10 latest, paginated). | [`app.py`](app.py), [`web_v2/main.py`](web_v2/main.py) |
 | Vector DB | ChromaDB client-server fallback, HyDE-formatted embeddings, retry-on-lock wrapper. | [`src/database.py`](src/database.py) |
 | Admin UX | Draft preservation, smart toolbar (`[GAMBAR X]` auto-counter), preview-before-publish, zombie image cleaner. | [`admin.py`](admin.py), [`src/utils.py`](src/utils.py) |
 | Omnichannel | WhatsApp gateway with selective triggers, FastAPI webhook, media handling. | [`bot_wa.py`](bot_wa.py) |

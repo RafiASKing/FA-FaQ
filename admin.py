@@ -396,7 +396,7 @@ with tab4:
 # === TAB 5: ANALYTICS (FEEDBACK LOOP) ===
 with tab5:
     st.subheader("📈 Pencarian Gagal (User Feedback)")
-    st.caption("Daftar kata kunci yang dicari User tapi hasilnya < 32% (Tidak Relevan).")
+    st.caption("Daftar kata kunci yang dicari User tapi hasilnya < 41% (Tidak Relevan).")
     
     if utils.os.path.exists(FAILED_SEARCH_LOG):
         df_log = pd.read_csv(FAILED_SEARCH_LOG)
