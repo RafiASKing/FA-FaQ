@@ -177,7 +177,7 @@ def process_logic(remote_jid, sender_name, message_body, is_group, mentioned_lis
         utils.log_failed_search(clean_query)
         
         # 2. Balas User
-        send_wpp_text(remote_jid, "Maaf, belum ada data yang cocok. Coba tanya lebih spesifik.")
+        send_wpp_text(remote_jid, f"Maaf, belum ada data yang cocok. Coba tanya lebih spesifik atau cek FaQs lengkap di {WEB_V2_URL}.")
         return
         
     # --- UPGRADE 2: HEADER CLEAN & OBJEKTIF ---
