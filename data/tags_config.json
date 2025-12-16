@@ -26,5 +26,21 @@
     "EMR Cashier": {
         "color": "#9B59B6",
         "desc": ""
+    },
+    "OOT": {
+        "color": "#333333",
+        "desc": "Out of Topic"
+    },
+    "Warning": {
+        "color": "#9B59B6",
+        "desc": ""
+    },
+    "Internal Bithealth": {
+        "color": "#FFA500",
+        "desc": "Peraturan Company"
+    },
+    "MCU": {
+        "color": "#FFA500",
+        "desc": "Medical Check Up, Pemeriksaan Kesehatan Rutin"
     }
 }
