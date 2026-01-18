@@ -1,204 +1,181 @@
 import streamlit as st
 import os
-import re
 import chromadb
+import numpy as np
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-# --- IMPORT DARI MODULE PROJECT KAMU ---
-# Pastikan script ini ada di root folder (sejajar dengan folder src)
+# --- IMPORT MODUL PROJECT ---
 from src import utils, config
 
-# Load Environment Variables
 load_dotenv()
 
-# --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="🔬 Search Method Lab", layout="centered")
-st.title("🔬 Search Method Experiment")
-st.caption("Bandingkan 4 strategi Task Type embedding secara realtime.")
+# --- CONFIG HALAMAN (WIDE MODE BIAR MUAT 4 KOLOM) ---
+st.set_page_config(page_title="⚔️ Battle Arena: Search Methods", layout="wide")
 
-# Load Config Tag untuk Warna
-TAGS_MAP = utils.load_tags_config()
+# --- JUDUL ---
+st.title("⚔️ Search Method Battle Arena")
+st.markdown("""
+Dashboard ini membandingkan 4 strategi **Query Embedding** secara side-by-side.
+Database diasumsikan statis (menggunakan `RETRIEVAL_DOCUMENT`). Kita memanipulasi cara AI melihat **Pertanyaan User**.
+""")
 
-# --- FUNGSI KHUSUS UNTUK TESTING INI (BYPASS CACHE) ---
-# Kita buat fungsi embedding lokal di sini supaya bisa gonta-ganti Task Type
-# tanpa mengganggu kode produksi di src/database.py
-
+# --- FUNGSI EMBEDDING DINAMIS ---
 def get_experimental_embedding(text, task_type):
-    """
-    Generate embedding dengan Task Type yang dinamis sesuai pilihan Dropdown.
-    """
     if not text: return []
-    
     try:
         client = genai.Client(api_key=config.GOOGLE_API_KEY)
-        
-        # Panggil Model Gemini-Embedding-001
         response = client.models.embed_content(
             model="models/gemini-embedding-001",
             contents=text,
             config=types.EmbedContentConfig(
                 task_type=task_type,
                 # Kita pakai default 3072 dimensi (Full Precision)
-                # output_dimensionality=None 
             )
         )
         return response.embeddings[0].values
     except Exception as e:
-        st.error(f"⚠️ Error API Google: {e}")
         return []
 
 def get_chroma_collection():
-    """Koneksi ke ChromaDB yang sudah ada"""
-    # Cek apakah pakai server atau file lokal
     host = os.getenv("CHROMA_HOST")
     port = os.getenv("CHROMA_PORT")
-
     if host and port:
         client = chromadb.HttpClient(host=host, port=int(port))
     else:
         client = chromadb.PersistentClient(path=config.DB_PATH)
-        
     return client.get_or_create_collection(name=config.COLLECTION_NAME)
 
-# --- HELPER UI ---
-def get_badge_color_name(tag):
-    tag_data = TAGS_MAP.get(tag, {})
-    hex_code = tag_data.get("color", "#808080").upper() 
-    hex_to_name = {
-        "#FF4B4B": "red", "#2ECC71": "green", "#3498DB": "blue",
-        "#FFA500": "orange", "#9B59B6": "violet", "#808080": "gray"
+# --- DEFINISI METODE ---
+METHODS = {
+    "RETRIEVAL_QUERY": {
+        "label": "Asymmetric (Recommended)",
+        "desc": "Fokus pada Intent, abaikan basa-basi.",
+        "icon": "🛡️"
+    },
+    "RETRIEVAL_DOCUMENT": {
+        "label": "Symmetric (Document)",
+        "desc": "Mencocokkan pola kalimat & kata.",
+        "icon": "📄"
+    },
+    "SEMANTIC_SIMILARITY": {
+        "label": "Semantic Similarity",
+        "desc": "Kemiripan makna murni.",
+        "icon": "⚖️"
+    },
+    "QUESTION_ANSWERING": {
+        "label": "Question Answering",
+        "desc": "Ekspektasi kalimat tanya baku.",
+        "icon": "🎓"
     }
-    return hex_to_name.get(hex_code, "gray")
-
-def render_mixed_content(jawaban_text, images_str):
-    # Render sederhana untuk preview
-    if not images_str or str(images_str).lower() == 'none':
-        st.markdown(jawaban_text)
-        return
-
-    img_list = images_str.split(';')
-    parts = re.split(r'(\[GAMBAR\s*\d+\])', jawaban_text, flags=re.IGNORECASE)
-    
-    for part in parts:
-        match = re.search(r'\[GAMBAR\s*(\d+)\]', part, re.IGNORECASE)
-        if match:
-            try:
-                idx = int(match.group(1)) - 1 
-                if 0 <= idx < len(img_list):
-                    clean_p = utils.fix_image_path_for_ui(img_list[idx])
-                    if clean_p and os.path.exists(clean_p):
-                        st.image(clean_p, use_container_width=True)
-            except: pass
-        else:
-            if part.strip(): st.markdown(part)
-
-# --- UI UTAMA ---
-
-# 1. SETUP STRATEGI
-st.sidebar.header("⚙️ Konfigurasi Eksperimen")
-st.sidebar.markdown("Pilih bagaimana sistem melihat **Pertanyaan User**:")
-
-method_option = st.sidebar.radio(
-    "Task Type (User Query):",
-    [
-        "RETRIEVAL_QUERY (Asymmetric - Recommended)",
-        "RETRIEVAL_DOCUMENT (Symmetric)",
-        "SEMANTIC_SIMILARITY (Symmetric)",
-        "QUESTION_ANSWERING (Strict QA)"
-    ],
-    index=0
-)
-
-# Mapping pilihan ke string API Google
-TASK_TYPE_MAP = {
-    "RETRIEVAL_QUERY (Asymmetric - Recommended)": "RETRIEVAL_QUERY",
-    "RETRIEVAL_DOCUMENT (Symmetric)": "RETRIEVAL_DOCUMENT",
-    "SEMANTIC_SIMILARITY (Symmetric)": "SEMANTIC_SIMILARITY",
-    "QUESTION_ANSWERING (Strict QA)": "QUESTION_ANSWERING"
 }
-selected_task_type = TASK_TYPE_MAP[method_option]
 
-st.sidebar.info(f"""
-**Strategi saat ini:**
-User Query di-embed sebagai `{selected_task_type}`.
+# --- INPUT QUERY ---
+with st.container():
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        query = st.text_input("💬 Masukkan Pertanyaan User:", placeholder="Contoh: gagal discharge, form aps, selamat pagi error...", value="gagal discharge")
+    with c2:
+        st.write("") # Spacer
+        st.write("")
+        run_btn = st.button("🔥 MULAI PERTARUNGAN", type="primary", use_container_width=True)
 
-*Database diasumsikan sudah di-embed menggunakan `RETRIEVAL_DOCUMENT` (Default).*
-""")
+st.divider()
 
-# 2. INPUT QUERY
-query = st.text_input("Tes Pertanyaan User:", placeholder="Contoh: gagal discharge, resep error...", key="q_test")
-
-# 3. PROSES PENCARIAN
-if query:
-    st.divider()
+# --- MAIN LOGIC ---
+if run_btn and query:
+    # Siapkan 4 Kolom
+    cols = st.columns(4)
+    col_idx = 0
     
-    with st.spinner(f"Mencari menggunakan metode {selected_task_type}..."):
-        # A. Embed Query User (Pakai Task Type Pilihan)
-        query_vec = get_experimental_embedding(query, selected_task_type)
-        
-        if query_vec:
-            # B. Query ke Chroma
-            col = get_chroma_collection()
-            results = col.query(
-                query_embeddings=[query_vec],
-                n_results=10 
-            )
+    # Koneksi DB
+    chroma_col = get_chroma_collection()
+
+    # Loop setiap metode
+    for task_name, meta in METHODS.items():
+        with cols[col_idx]:
+            # Header Kolom
+            st.subheader(f"{meta['icon']} {meta['label']}")
+            st.caption(f"Task: `{task_name}`")
+            st.caption(meta['desc'])
             
-            # C. Tampilkan Hasil
-            if results['ids'][0]:
-                st.markdown(f"### Hasil Pencarian ({len(results['ids'][0])} Teratas)")
+            # 1. Embed
+            with st.spinner("Embedding..."):
+                vec = get_experimental_embedding(query, task_name)
+            
+            if vec:
+                # 2. Search (Top 5)
+                results = chroma_col.query(query_embeddings=[vec], n_results=5)
                 
-                for i in range(len(results['ids'][0])):
-                    meta = results['metadatas'][0][i]
-                    dist = results['distances'][0][i]
-                    score = max(0, (1 - dist) * 100)
+                if results['ids'][0]:
+                    ids = results['ids'][0]
+                    metas = results['metadatas'][0]
+                    dists = results['distances'][0]
                     
-                    # Logic Warna Score
-                    if score > 80: score_color = "green"
-                    elif score > 50: score_color = "orange"
-                    else: score_color = "red"
+                    # --- ANALISIS GAP (JUARA 1 vs JUARA 2) ---
+                    score_1 = max(0, (1 - dists[0]) * 100)
+                    score_2 = max(0, (1 - dists[1]) * 100) if len(dists) > 1 else 0
+                    gap = score_1 - score_2
                     
-                    # Badge Tag
-                    tag = meta.get('tag', 'Umum')
-                    badge_col = get_badge_color_name(tag)
+                    # Tampilkan Metric GAP
+                    # Gap besar = Bagus (Sangat yakin bedanya benar dan salah)
+                    # Gap kecil = Bahaya (Bingung mana yang benar)
+                    gap_color = "normal"
+                    if gap > 15: gap_color = "normal" # Hijau di metric
+                    elif gap < 5: gap_color = "inverse" # Merah/Warning
                     
-                    # Judul Expander
-                    label = f"**{score:.2f}%** - :{badge_col}-background[{tag}] {meta.get('judul')}"
+                    st.metric(
+                        label="Top Score / Safety Gap", 
+                        value=f"{score_1:.1f}%", 
+                        delta=f"Gap: {gap:.1f}%",
+                        delta_color=gap_color
+                    )
                     
-                    with st.expander(label, expanded=(i==0)): # Yg pertama auto open
-                        st.caption(f"ID Dokumen: {results['ids'][0][i]}")
-                        st.markdown(f"**Score Relevansi:** :{score_color}[{score:.4f}%]")
-                        st.markdown("---")
-                        render_mixed_content(meta.get('jawaban_tampil', ''), meta.get('path_gambar'))
+                    st.markdown("---")
+                    
+                    # 3. Render List
+                    for i in range(len(ids)):
+                        curr_score = max(0, (1 - dists[i]) * 100)
+                        curr_meta = metas[i]
                         
-                        st.markdown("---")
-                        st.caption(f"**Keywords (Hidden):** {meta.get('keywords_raw')}")
-                        st.caption(f"**Source URL:** {meta.get('sumber_url')}")
+                        # Style Card
+                        tag = curr_meta.get('tag', 'Umum')
+                        judul = curr_meta.get('judul', 'No Title')
+                        
+                        # Highlight Juara 1
+                        bg_style = ""
+                        if i == 0:
+                            bg_style = "border: 2px solid #4CAF50; background-color: #f0fff0; padding: 10px; border-radius: 5px;"
+                            emoji = "🥇"
+                        elif i == 1:
+                            bg_style = "border: 1px solid #ff9800; padding: 5px; border-radius: 5px; opacity: 0.8;"
+                            emoji = "🥈"
+                        else:
+                            bg_style = "border: 1px solid #ddd; padding: 5px; border-radius: 5px; opacity: 0.6;"
+                            emoji = f"#{i+1}"
+
+                        # HTML Card Sederhana
+                        st.markdown(f"""
+                        <div style="{bg_style} margin-bottom: 10px; color: black;">
+                            <small><b>{emoji} Score: {curr_score:.2f}%</b></small><br>
+                            <span style="background-color: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">{tag}</span>
+                            <span style="font-size: 0.9em; font-weight: bold;">{judul}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Expander untuk intip isi (buat debug)
+                        with st.expander("🔍 Intip Konten"):
+                            st.caption(f"Hidden Keyword: {curr_meta.get('keywords_raw')}")
+                            st.text(curr_meta.get('jawaban_tampil')[:100] + "...")
+                            
+                else:
+                    st.warning("Tidak ada hasil.")
             else:
-                st.warning("Tidak ditemukan hasil.")
-        else:
-            st.error("Gagal melakukan embedding. Cek koneksi internet/API Key.")
+                st.error("Gagal Embedding.")
+        
+        col_idx += 1
 
 else:
-    st.info("👋 Masukkan pertanyaan di atas untuk mulai membandingkan hasil.")
-    st.markdown("""
-    ### Panduan Eksperimen Task Type:
-    
-    1. **RETRIEVAL_QUERY**: 
-       - Menganggap input user adalah *pencarian* (informal, keyword acak).
-       - Biasanya terbaik untuk search bar.
-       
-    2. **RETRIEVAL_DOCUMENT**: 
-       - Menganggap input user adalah *fakta/dokumen*.
-       - Coba gunakan kalimat pernyataan lengkap, misal: *"Cara melakukan discharge pasien adalah..."*
-       
-    3. **SEMANTIC_SIMILARITY**:
-       - Mengukur kemiripan makna murni.
-       - Coba gunakan kalimat yang mirip persis dengan judul FAQ.
-       
-    4. **QUESTION_ANSWERING**:
-       - Menganggap input user adalah *pertanyaan ujian*.
-       - Coba gunakan format tanya baku: *"Bagaimana cara discharge?"*
-    """)
+    # State Awal (Belum Run)
+    st.info("👋 Ketik pertanyaan dan tekan tombol oranye untuk melihat pertarungan algoritma.")
