@@ -1,0 +1,24 @@
+# --- DATABASE & VOLUMES (Wajib Ignore Wildcard) ---
+postgres_data*
+evolution_store*
+evolution_instances*
+waha_data*
+data/chroma_data
+
+# --- WPPCONNECT SESSION (BARU - WAJIB DITAMBAH) ---
+# Supaya sesi WA tidak ikut tercopy ke dalam image saat build
+wpp_tokens
+wpp_sessions
+wpp_userData
+
+# --- SYSTEM & GIT ---
+.git
+.gitignore
+__pycache__
+*.pyc
+.DS_Store
+.env
+
+# --- PYTHON VENV (Jaga-jaga kalau ada di local) ---
+venv
+env

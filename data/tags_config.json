@@ -1,0 +1,46 @@
+{
+    "ED": {
+        "color": "#FF4B4B",
+        "desc": "IGD, Emergency"
+    },
+    "OPD": {
+        "color": "#2ECC71",
+        "desc": "Rawat Jalan, Poli"
+    },
+    "IPD": {
+        "color": "#3498DB",
+        "desc": "Rawat Inap, Bangsal"
+    },
+    "MR": {
+        "color": "#3498DB",
+        "desc": "Medical Record"
+    },
+    "Rehab": {
+        "color": "#3498DB",
+        "desc": "Fisioterapi, Rehab Medik"
+    },
+    "Lab": {
+        "color": "#FFA500",
+        "desc": "Laboratorium"
+    },
+    "EMR Cashier": {
+        "color": "#9B59B6",
+        "desc": ""
+    },
+    "OOT": {
+        "color": "#333333",
+        "desc": "Out of Topic"
+    },
+    "Warning": {
+        "color": "#9B59B6",
+        "desc": ""
+    },
+    "Internal Bithealth": {
+        "color": "#FFA500",
+        "desc": "Peraturan Company"
+    },
+    "MCU": {
+        "color": "#FFA500",
+        "desc": "Medical Check Up, Pemeriksaan Kesehatan Rutin"
+    }
+}
