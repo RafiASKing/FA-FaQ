@@ -1,19 +1,36 @@
+"""
+User App - Streamlit application untuk pencarian FAQ.
+Migrasi dari app.py original dengan menggunakan service layer baru.
+"""
+
 import streamlit as st
 import os
 import math
-import re
 import warnings
-from src import database, utils
+
+# Import dari service layer baru
+from app.services import SearchService
+from core.tag_manager import TagManager
+from core.content_parser import ContentParser
+from core.image_handler import ImageHandler
+from core.logger import log_failed_search
+from config.constants import (
+    ITEMS_PER_PAGE, 
+    WEB_TOP_RESULTS,
+    RELEVANCE_THRESHOLD,
+    HIGH_RELEVANCE_THRESHOLD,
+    MEDIUM_RELEVANCE_THRESHOLD,
+    HEX_TO_STREAMLIT_COLOR
+)
+from config.settings import settings
+
 
 # --- 1. CONFIG & SUPPRESS WARNINGS ---
 st.set_page_config(page_title="Hospital Knowledge Base", page_icon="🏥", layout="centered")
-
-# Matikan warning deprecation
-# (Kode lama dihapus karena sudah tidak supported di Streamlit baru)
 warnings.filterwarnings("ignore")
 
-# Load Konfigurasi Tag dari JSON (Single Source of Truth)
-TAGS_MAP = utils.load_tags_config()
+# Load Konfigurasi Tag
+TAGS_MAP = TagManager.load_tags()
 
 # CSS Styling
 st.markdown("""
@@ -35,75 +52,78 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. HELPER FUNGSI ---
 
-def get_badge_color_name(tag):
-    """
-    Menerjemahkan HEX Code dari tags_config.json menjadi Nama Warna Streamlit.
-    """
-    tag_data = TAGS_MAP.get(tag, {})
-    hex_code = tag_data.get("color", "#808080").upper() 
-    
-    hex_to_name = {
-        "#FF4B4B": "red",     # Merah (ED)
-        "#2ECC71": "green",   # Hijau (OPD)
-        "#3498DB": "blue",    # Biru (IPD/MR/Rehab)
-        "#FFA500": "orange",  # Orange (Cashier)
-        "#9B59B6": "violet",  # Ungu (Farmasi)
-        "#808080": "gray",    # Abu (Umum)
-        "#333333": "gray"     # Dark Gray
-    }
-    
-    return hex_to_name.get(hex_code, "gray")
+# --- 2. HELPER FUNCTIONS ---
 
-def render_image_safe(image_path):
+def get_badge_color_name(tag: str) -> str:
+    """
+    Menerjemahkan HEX Code ke Nama Warna Streamlit.
+    """
+    return TagManager.get_streamlit_color_name(tag)
+
+
+def render_image_safe(image_path: str):
+    """Render gambar dengan pengecekan keberadaan file."""
     if image_path and os.path.exists(image_path):
         st.image(image_path, use_container_width=True)
 
-def render_mixed_content(jawaban_text, images_str):
-    if not images_str or str(images_str).lower() == 'none':
-        st.markdown(jawaban_text)
-        return
 
-    img_list = images_str.split(';')
-    img_list = [x for x in img_list if x.strip()]
-    parts = re.split(r'(\[GAMBAR\s*\d+\])', jawaban_text, flags=re.IGNORECASE)
+def render_mixed_content(jawaban_text: str, images_str: str):
+    """
+    Render konten dengan gambar inline.
+    Menggunakan ContentParser untuk parsing.
+    """
+    parts = ContentParser.get_streamlit_parts(jawaban_text, images_str)
     
-    # Case 1: Fallback (Gambar di bawah)
-    if len(parts) == 1:
-        st.markdown(jawaban_text)
+    # Check jika hanya ada 1 part text (tidak ada tag [GAMBAR])
+    if len(parts) == 1 and parts[0].get('type') == 'text':
+        st.markdown(parts[0]['content'])
+        
+        # Fallback: tampilkan gambar di bawah jika ada
+        img_list = ContentParser.parse_image_paths(images_str)
         if img_list:
             st.markdown("---")
             cols = st.columns(min(3, len(img_list)))
             for idx, p in enumerate(img_list):
-                clean_p = utils.fix_image_path_for_ui(p)
+                clean_p = ImageHandler.fix_path_for_ui(p)
                 if clean_p and os.path.exists(clean_p):
                     with cols[idx % 3]:
                         st.image(clean_p, use_container_width=True)
         return
-
-    # Case 2: Inline (Diselipkan)
+    
+    # Render parts
     for part in parts:
-        match = re.search(r'\[GAMBAR\s*(\d+)\]', part, re.IGNORECASE)
-        if match:
-            try:
-                idx = int(match.group(1)) - 1 
-                if 0 <= idx < len(img_list):
-                    clean_p = utils.fix_image_path_for_ui(img_list[idx])
-                    if clean_p and os.path.exists(clean_p):
-                        render_image_safe(clean_p)
-                    else:
-                        st.error(f"🖼️ File gambar tidak ditemukan: {clean_p}")
-                else:
-                    st.caption(f"*(Gambar #{idx+1} tidak tersedia)*")
-            except ValueError: pass
-        else:
-            if part.strip(): st.markdown(part)
+        ptype = part.get('type')
+        
+        if ptype == 'text':
+            if part.get('content', '').strip():
+                st.markdown(part['content'])
+        
+        elif ptype == 'image':
+            if part.get('exists'):
+                render_image_safe(part['path'])
+            else:
+                st.error(f"🖼️ File gambar tidak ditemukan: {part.get('path')}")
+        
+        elif ptype == 'missing_image':
+            st.caption(f"*(Gambar #{part.get('index')} tidak tersedia)*")
+        
+        elif ptype == 'divider':
+            st.markdown("---")
+        
+        elif ptype == 'gallery_image':
+            if part.get('exists'):
+                st.image(part['path'], use_container_width=True)
+
 
 # --- 3. STATE MANAGEMENT ---
-if 'page' not in st.session_state: st.session_state.page = 0
-if 'last_query' not in st.session_state: st.session_state.last_query = ""
-if 'last_filter' not in st.session_state: st.session_state.last_filter = ""
+if 'page' not in st.session_state: 
+    st.session_state.page = 0
+if 'last_query' not in st.session_state: 
+    st.session_state.last_query = ""
+if 'last_filter' not in st.session_state: 
+    st.session_state.last_filter = ""
+
 
 # --- 4. HEADER UI ---
 st.title("⚡Fast Cognitive Search System")
@@ -111,15 +131,19 @@ st.caption("Smart Knowledge Base Retrieval")
 
 col_q, col_f = st.columns([3, 1])
 with col_q:
-    query = st.text_input("Cari isu/kendala:", placeholder="Ketik masalah (cth: Kenapa Gagal Retur Obat, gagal discharge)...")
+    query = st.text_input(
+        "Cari isu/kendala:", 
+        placeholder="Ketik masalah (cth: Kenapa Gagal Retur Obat, gagal discharge)..."
+    )
 with col_f:
-    # Ambil tag unik dari DB agar dropdown dinamis
+    # Ambil tag unik dari DB
     try:
-        db_tags = database.get_unique_tags_from_db()
+        db_tags = SearchService.get_unique_tags()
     except:
         db_tags = []
     all_tags = ["Semua Modul"] + (db_tags if db_tags else [])
     filter_tag = st.selectbox("Filter:", all_tags)
+
 
 # --- 5. LOGIC PENCARIAN ---
 if query != st.session_state.last_query or filter_tag != st.session_state.last_filter:
@@ -132,34 +156,43 @@ is_search_mode = False
 
 if query:
     is_search_mode = True
-    # Tetap ambil agak banyak dari DB (misal 10 atau 20) buat kandidat
-    raw = database.search_faq(query, filter_tag, n_results=50) 
     
-    if raw['ids'][0]:
-        for i in range(len(raw['ids'][0])):
-            meta = raw['metadatas'][0][i]
-            dist = raw['distances'][0][i]
-            score = max(0, (1 - dist) * 100)
-            
-            # 1. TETAPKAN SYARAT MINIMUM 41%
-            if score > 41:
-                meta['score'] = score
-                results.append(meta)
-        
-        # 2. 👇 TAMBAHKAN BARIS INI (PEMOTONG) 👇
-        # Ini artinya: "Ambil list results dari urutan ke-0 sampai ke-3 aja"
-        results = results[:3]
+    # Gunakan SearchService
+    tag_filter = filter_tag if filter_tag != "Semua Modul" else None
+    search_results = SearchService.search_for_web(query, tag_filter, WEB_TOP_RESULTS)
+    
+    for r in search_results:
+        results.append({
+            'id': r.id,
+            'tag': r.tag,
+            'judul': r.judul,
+            'jawaban_tampil': r.jawaban_tampil,
+            'path_gambar': r.path_gambar,
+            'sumber_url': r.sumber_url,
+            'score': r.score,
+            'badge_color': r.badge_color
+        })
 else:
-    raw_all = database.get_all_faqs_sorted()
-    if filter_tag == "Semua Modul":
-        results = raw_all
-    else:
-        results = [x for x in raw_all if x.get('tag') == filter_tag]
+    # Browse mode
+    tag_filter = filter_tag if filter_tag != "Semua Modul" else None
+    raw_all = SearchService.get_all_faqs(tag_filter)
+    
+    for item in raw_all:
+        results.append({
+            'id': item.get('id', ''),
+            'tag': item.get('tag', 'Umum'),
+            'judul': item.get('judul', ''),
+            'jawaban_tampil': item.get('jawaban_tampil', ''),
+            'path_gambar': item.get('path_gambar', 'none'),
+            'sumber_url': item.get('sumber_url', ''),
+            'score': None,
+            'badge_color': item.get('badge_color', '#808080')
+        })
+
 
 # --- 6. PAGINATION & DISPLAY ---
-ITEMS_PER_PAGE = 10
 total_docs = len(results)
-total_pages = math.ceil(total_docs / ITEMS_PER_PAGE)
+total_pages = math.ceil(total_docs / ITEMS_PER_PAGE) if total_docs > 0 else 1
 
 if st.session_state.page >= total_pages and total_pages > 0:
     st.session_state.page = 0
@@ -172,12 +205,14 @@ st.divider()
 
 if not page_data:
     if is_search_mode:
-        # Catat query gagal ke CSV
-        try: utils.log_failed_search(query)
-        except: pass
+        # Catat query gagal
+        try:
+            log_failed_search(query)
+        except:
+            pass
         
-        # === CALL TO ACTION (WA BOT) ===
-        st.warning(f"❌ Tidak ditemukan hasil yang relevan (Relevansi < 41%).")
+        # === CALL TO ACTION ===
+        st.warning(f"❌ Tidak ditemukan hasil yang relevan (Relevansi < {RELEVANCE_THRESHOLD}%).")
         
         st.markdown("""
         ### 🧐 Belum ada solusinya?
@@ -187,8 +222,7 @@ if not page_data:
         2. Atau langsung request bantuan ke Tim IT Support:
         """)
         
-        # GANTI NOMOR WA DI SINI (Format: 628xxx)
-        wa_number = "6289635225253" 
+        wa_number = settings.wa_support_number
         wa_text = f"Halo Admin, saya cari solusi tentang '{query}' tapi tidak ketemu di aplikasi FAQ."
         wa_link = f"https://wa.me/{wa_number}?text={wa_text.replace(' ', '%20')}"
         
@@ -210,55 +244,44 @@ if not page_data:
             </button>
         </a>
         ''', unsafe_allow_html=True)
-        # ===============================
-        
     else:
         st.info("👋 Selamat Datang. Database siap digunakan.")
 else:
     st.markdown(f"**Menampilkan {start_idx+1}-{min(end_idx, total_docs)} dari {total_docs} data**")
     
     for item in page_data:
-        # 1. Badge Warna Modul
+        # Badge Warna Modul
         tag = item.get('tag', 'Umum')
         badge_color = get_badge_color_name(tag)
         
-        # 2. Indikator Relevansi (CUSTOM COLOR LOGIC) 🎨
+        # Indikator Relevansi
         score_md = ""
         if item.get('score'):
             sc = item['score']
             
-            # --- ATURAN WARNA BARU ---
-            if sc > 80:
-                # > 80%: "Ijo Tua" (Kita pake Green + BOLD + Bintang biar beda)
-                # Streamlit cuma punya 1 green, jadi kita tebalkan biar tegas.
+            if sc > HIGH_RELEVANCE_THRESHOLD:
                 score_md = f":green[**({sc:.0f}% Relevansi) 🌟**]"
-            
-            elif sc > 50:
-                # 50% - 80%: "Ijo Muda" (Green biasa/tipis)
+            elif sc > MEDIUM_RELEVANCE_THRESHOLD:
                 score_md = f":green[({sc:.0f}% Relevansi)]"
-            
-            elif sc > 41:
-                # 42% - 50%: Orange
+            elif sc > RELEVANCE_THRESHOLD:
                 score_md = f":orange[({sc:.0f}% Relevansi)]"
-            
             else:
-                # 41% - 36%: Merah
                 score_md = f":red[({sc:.0f}% Relevansi)]"
-            
+        
         label = f":{badge_color}-background[{tag}] **{item.get('judul')}** {score_md}"
         
         with st.expander(label):
             render_mixed_content(item.get('jawaban_tampil', '-'), item.get('path_gambar'))
-            # --- LOGIKA "MAGER" TAPI AMAN ---
+            
             src_raw = item.get('sumber_url')
             if src_raw and len(str(src_raw)) > 3:
                 src = str(src_raw).strip()
-
                 if "http" in src and " " not in src:
                     st.markdown(f"🔗 [Buka Sumber Referensi]({src})")
                 else:
                     st.markdown(f"🔗 **Sumber:** {src}")
 
+    # Pagination controls
     if total_pages > 1:
         st.markdown("---")
         c1, c2, c3 = st.columns([1, 2, 1])

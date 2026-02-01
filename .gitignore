@@ -1,17 +1,40 @@
+# === BACKUP & LOCAL DATA ===
 backup/
+data_backup/
 images/
 faq_db/
 data/faq_db/
-data/chroma_data
-faq_data.xlsx
+data/chroma_data/
+data/failed_searches.csv
+
+# === IDE & EDITOR ===
+.claude/
+.vscode/
+*.swp
+*.swo
+
+# === PYTHON ===
 venv/
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# === ENVIRONMENT & SECRETS ===
 .env
 .streamlit/secrets.toml
-data_backup/
-compiles_all_codes_to_one_script.py
+
+# === GENERATED FILES ===
 single_script_for_llm.txt
-data/failed_searches.csv
-data/tags_config.json
-.claude/
-CLAUDE.md
+
+# === SESSION DATA ===
+wpp_sessions/
+wpp_tokens/
+
+# === MISC ===
+*.log
+.DS_Store
+Thumbs.db
