@@ -44,6 +44,7 @@
 ## Gotchas
 - Streamlit apps import services directly (not via API)
 - Win32 platform: use `rm` not `del` in bash tool
-- `.env` CHROMA_HOST/CHROMA_PORT must be commented out for local dev (embedded mode)
+- **Local dev uses ChromaDB server mode** — run `docker compose up chroma-server -d` and set `CHROMA_HOST=localhost`, `CHROMA_PORT=8000` in `.env`
+- Embedded ChromaDB mode is NOT recommended — crashes even with `retry_on_lock`
 - Old top-level `ports/`, `adapters/`, `container.py` were DELETED
 - `config/database.py` was DELETED — absorbed into adapters + container

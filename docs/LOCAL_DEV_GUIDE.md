@@ -27,23 +27,42 @@ Required env vars:
 |---|---|---|
 | `GOOGLE_API_KEY` | Yes | Google Gemini API key |
 | `ADMIN_PASSWORD_HASH` | Yes | Bcrypt hash for admin login |
-| `CHROMA_HOST` | No | ChromaDB host (comment out for local embedded mode) |
-| `CHROMA_PORT` | No | ChromaDB port (comment out for local embedded mode) |
+| `CHROMA_HOST` | Local dev: Yes | ChromaDB host (`localhost` for local server mode) |
+| `CHROMA_PORT` | Local dev: Yes | ChromaDB port (default: `8000`) |
 | `WA_BASE_URL` | Bot only | WPPConnect server URL |
 | `WA_SESSION_KEY` | Bot only | WPPConnect auth token |
 | `BOT_IDENTITIES` | Bot only | Bot phone number JIDs (comma-separated) |
 
 ---
 
-## Running Locally (No Docker)
+## Running Locally (ChromaDB Server Mode - Recommended)
 
-For local dev, **comment out** `CHROMA_HOST` and `CHROMA_PORT` in `.env` so ChromaDB uses embedded mode (PersistentClient at `data/chroma_data/`).
+> **Why server mode?** Embedded mode (PersistentClient) has been unreliable — crashes occur even with `retry_on_lock` wrapper. Running ChromaDB as a container provides better stability.
+
+### Step 1: Start ChromaDB Server
+
+```bash
+# Start only the ChromaDB container
+docker compose up chroma-server -d
+```
+
+This starts ChromaDB on **port 8000** with data persisted to `data/chroma_data/`.
+
+### Step 2: Configure .env for Server Mode
+
+Make sure your `.env` has:
+```ini
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+```
+
+### Step 3: Run Python Apps (outside Docker)
 
 Each command needs its own terminal:
 
 ```bash
-# API Server (port 8000) — search, FAQ CRUD, agent endpoints
-python main.py api
+# API Server (port 8000 conflicts with Chroma — use 8001)
+python main.py api --port 8001
 
 # Web Frontend (port 8080) — HTML/CSS search page
 python main.py web
@@ -56,15 +75,15 @@ streamlit run streamlit_apps/user_app.py --server.port 8501
 ```
 
 Verify:
-- API docs: http://localhost:8000/docs
+- API docs: http://localhost:8001/docs
 - Web search: http://localhost:8080
 - Admin: http://localhost:8502
 - User app: http://localhost:8501
-- Health check: http://localhost:8000/health
+- Health check: http://localhost:8001/health
 
 ### Dev mode with auto-reload
 ```bash
-python main.py api --reload
+python main.py api --port 8001 --reload
 python main.py web --reload
 ```
 
