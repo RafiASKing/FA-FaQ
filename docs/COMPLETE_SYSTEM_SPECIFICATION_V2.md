@@ -352,7 +352,7 @@ WhatsApp Message
 ## 5. STRUKTUR DIREKTORI
 
 ```
-eighthExperiment/
+FA-FaQ/
 │
 ├── main.py                             # Unified entry point for all apps
 ├── requirements.txt                    # Python dependencies

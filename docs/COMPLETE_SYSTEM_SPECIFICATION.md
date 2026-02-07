@@ -248,7 +248,7 @@ WhatsApp Message
 ## 4. STRUKTUR DIREKTORI
 
 ```
-eighthExperiment/
+FA-FaQ/
 │
 ├── app.py                          # Streamlit User Application
 ├── admin.py                        # Streamlit Admin Console
@@ -2632,7 +2632,7 @@ ISI KONTEN: {cleaned_answer}
 ```bash
 # 1. Clone repository
 git clone <repo-url>
-cd eighthExperiment
+cd FA-FaQ
 
 # 2. Create virtual environment
 python -m venv venv

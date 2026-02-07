@@ -1,4 +1,4 @@
-# Project Memory - Hospital FAQ Retriever (eighthExperiment)
+# Project Memory - Hospital FAQ Retriever (FA-FaQ)
 
 ## Architecture (Siloam-aligned Ports & Adapters)
 - **Pattern**: Ports & Adapters (Hexagonal Architecture), folder layout aligned to Siloam AI Research Template
@@ -38,7 +38,7 @@
 - No "Future TODO" comments — if it can be done now, do it now
 - Siloam alignment is priority (folder layout, patterns, conventions)
 - Preload everything at startup, no cold-start for first user
-- Documentation for session continuity: `docs/REFACTORING_V2.1_PORTS_ADAPTERS.md`
+- Documentation for session continuity: `docs/REFACTORING_V2.1_PORTS_ADAPTERS.md`, `docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md`
 - Always use latest model versions (e.g., `gemini-2.5-flash`)
 
 ## Gotchas
@@ -48,3 +48,6 @@
 - Embedded ChromaDB mode is NOT recommended — crashes even with `retry_on_lock`
 - Old top-level `ports/`, `adapters/`, `container.py` were DELETED
 - `config/database.py` was DELETED — absorbed into adapters + container
+- **Windows: set PYTHONPATH before Streamlit** — `$env:PYTHONPATH=\".\"`
+- **Windows: WPPConnect can't build** — use partial stack or run bot with Python
+- **Bot Tester** (`streamlit_apps/bot_tester.py`) — test bot logic without WPPConnect

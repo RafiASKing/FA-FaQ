@@ -4,6 +4,9 @@ FROM python:3.10-slim
 # Set folder kerja
 WORKDIR /app
 
+# Set PYTHONPATH so imports work from any subdirectory
+ENV PYTHONPATH=/app
+
 # Install build tools (PENTING untuk ChromaDB & pysqlite3)
 # Kita pertahankan python3-dev dan gcc supaya aman saat compile library AI
 RUN apt-get update && apt-get install -y \

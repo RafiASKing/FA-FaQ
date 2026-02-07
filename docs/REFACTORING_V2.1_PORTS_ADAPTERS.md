@@ -94,7 +94,7 @@ What was added:
 ## Current Architecture
 
 ```
-eighthExperiment/
+FA-FaQ/
 ├── app/
 │   ├── Kernel.py                      # App factory + lifespan (preloads resources)
 │   ├── ports/                         # Abstract interfaces (ABCs)

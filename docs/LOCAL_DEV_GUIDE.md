@@ -107,9 +107,12 @@ Services yang jalan:
 | Admin Streamlit | 8502 | http://localhost:8502 |
 | Web V2 | 8080 | http://localhost:8080 |
 
-### Partial stack (tanpa WA)
+### Partial stack (tanpa WA — Recommended for Windows)
+
+> **Windows limitation**: WPPConnect can't build from Git URL on Windows. Use partial stack instead.
+
 ```bash
-docker-compose up chroma-server faq-web-v2 faq-admin faq-user
+docker compose up --build -d chroma-server faq-web-v2 faq-admin faq-user
 ```
 
 Ini jalankan ChromaDB + Web + Admin + User tanpa WPPConnect dan Bot.
@@ -196,6 +199,27 @@ Ini langsung test search + embedding + ChromaDB tanpa butuh WA sama sekali.
 pytest tests/ -v
 ```
 
+**Option D: Bot Tester Streamlit (RECOMMENDED for Windows)**
+
+Gunakan Bot Tester — Streamlit app yang simulasi WhatsApp bot tanpa WPPConnect. **No errors in logs!**
+
+```powershell
+# Set PYTHONPATH (required for local Streamlit)
+$env:PYTHONPATH="."
+streamlit run streamlit_apps/bot_tester.py --server.port 8503
+```
+
+Open http://localhost:8503
+
+Features:
+- Toggle Private / Group mode
+- Shows if bot would reply (based on `@faq` detection)
+- Displays search results with relevance scores
+- Previews images that would be attached
+- Debug panel with raw data
+
+> **Why Bot Tester?** Calls `SearchService` directly, bypassing webhook + WPPConnect. No network errors.
+
 ---
 
 ## Testing Strategy Summary
@@ -205,7 +229,8 @@ pytest tests/ -v
 | Search, Embedding, ChromaDB | Local | `python main.py api` + curl/Postman/browser |
 | Web UI | Local | `python main.py web` + browser |
 | Admin CRUD | Local | `streamlit run streamlit_apps/admin_app.py` |
-| Bot logic (parsing, search, response) | Local | curl ke `/webhook/whatsapp` + cek logs |
+| Bot logic (parsing, search, response) | Local | **Bot Tester** (`streamlit_apps/bot_tester.py`) ✨ |
+| Bot logic (via webhook) | Local | curl ke `/webhook/whatsapp` + cek logs |
 | Bot WA send/receive (actual) | Prod (Lightsail) | Deploy, test dengan WA asli |
 | Agent reranking (LLM) | Local | curl ke `/api/v1/agent/rerank` |
 | Full integration | Prod | `docker-compose up` di Lightsail |
@@ -235,14 +260,25 @@ pytest tests/ -v
 
 | Port | Service | Mode |
 |---|---|---|
-| 8000 | FastAPI API / Bot | `python main.py api` or `bot` |
+| 8000 | ChromaDB (Docker) | `docker compose up chroma-server` |
+| 8001 | FastAPI API / Bot | `python main.py api --port 8001` |
 | 8080 | FastAPI Web V2 | `python main.py web` |
 | 8501 | Streamlit User | `streamlit run streamlit_apps/user_app.py` |
 | 8502 | Streamlit Admin | `streamlit run streamlit_apps/admin_app.py` |
-| 21465 | WPPConnect | Docker only |
+| 8503 | Bot Tester | `streamlit run streamlit_apps/bot_tester.py` |
+| 21465 | WPPConnect | Docker only (Linux/Lightsail) |
 
-Note: API dan Bot share port 8000 — jangan jalankan keduanya bersamaan di local. Kalau butuh keduanya, pakai `--port`:
+Note: ChromaDB uses port 8000, so API/Bot should use 8001 for local dev:
 ```bash
-python main.py api --port 8000
-python main.py bot --port 8005
+python main.py api --port 8001
+python main.py bot --port 8001
 ```
+
+---
+
+## Windows-Specific Notes
+
+1. **WPPConnect can't build on Windows** — use partial stack or run bot logic with Python directly
+2. **PYTHONPATH required for Streamlit** — run `$env:PYTHONPATH="."` before `streamlit run`
+3. **Use server mode for ChromaDB** — embedded mode crashes even with `retry_on_lock`
+

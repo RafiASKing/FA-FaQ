@@ -7,6 +7,8 @@ http://43.218.92.10:8501/ (app jadul) -> faq-assist.cloud/old-version
 
 sudo ln -s "/home/ubuntu/eighthExperiment/nginx/faq-assist.cloud.conf" /etc/nginx/sites-available/faq-assist.cloud.conf
 
+nama eighthExperiment diganti officialnya ke FA-FaQ, tapi kalau as is juga tidak apa apa
+
 # Perintah yang perlu Anda jalankan setelah pull, jadi tidak hanya pull saja tapi perlu refresh
 sudo nginx -t && sudo systemctl reload nginx
 
