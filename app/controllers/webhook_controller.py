@@ -50,6 +50,9 @@ class WebhookController:
             )
             return
         
+        # Send acknowledgment immediately (reduces perceived latency)
+        WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu,...")
+        
         log(f"🔍 Mencari: '{clean_query}'")
         
         # Search
