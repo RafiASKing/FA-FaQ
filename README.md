@@ -1,148 +1,167 @@
-# Fast Cognitive Search System
-Hospital's knowledge-base platform for SOPs, FAQs, and omnichannel support. It pairs semantic vector search (ChromaDB + Gemini embedding) with multi-surface delivery (Streamlit, FastAPI web, WhatsApp bot) and a safety-focused admin workflow.
+# FA-FaQ — Fast Cognitive Search System
+
+AI-powered knowledge base for hospital SOPs and FAQs. Uses **semantic vector search** (ChromaDB + Google Gemini) with multi-channel delivery: Web UI, Streamlit apps, and WhatsApp bot.
+
+Built with **Ports & Adapters** (Hexagonal Architecture) for easy swapping of AI providers, databases, and messaging platforms.
 
 ---
 
-## ✨ Highlight Features
-| Area | Capability | References |
-| --- | --- | --- |
-| Core Search | Hybrid **Search Mode** (Top-3, score > 41%) & **Browse Mode** (10 latest, paginated). | [`app.py`](app.py), [`web_v2/main.py`](web_v2/main.py) |
-| Vector DB | ChromaDB client-server fallback, HyDE-formatted embeddings, retry-on-lock wrapper. | [`src/database.py`](src/database.py) |
-| Admin UX | Draft preservation, smart toolbar (`[GAMBAR X]` auto-counter), preview-before-publish, zombie image cleaner. | [`admin.py`](admin.py), [`src/utils.py`](src/utils.py) |
-| Omnichannel | WhatsApp gateway with selective triggers, FastAPI webhook, media handling. | [`bot_wa.py`](bot_wa.py) |
-| Configurability | Restricted tag palette + JSON source of truth, `.env`-driven AI thresholds and secrets. | [`src/utils.py`](src/utils.py), [`src/config.py`](src/config.py) |
-| Analytics | Failed-search logging for content backlog insights. | [`src/utils.py`](src/utils.py), `data/failed_searches.csv` |
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| **Semantic Search** | HyDE-formatted embeddings via Google Gemini for accurate query matching |
+| **Multi-Channel** | FastAPI Web, Streamlit Apps, WhatsApp Bot (WPPConnect) |
+| **Agent Mode** | LLM-powered reranking with structured output (LangChain) |
+| **Admin Console** | CRUD operations with image upload and preview |
+| **Pluggable Architecture** | Swap embedding, LLM, vector DB, or messaging provider in one file |
 
 ---
 
-## 🗂️ Project Structure (partial)
+## 🏗️ Architecture
+
 ```
-.
-├─ app.py                # Streamlit user app
-├─ admin.py              # Streamlit admin console
-├─ bot_wa.py             # FastAPI WhatsApp gateway
-├─ web_v2/               # FastAPI + Jinja UI
-├─ src/
-│   ├─ config.py         # Env & path config
-│   ├─ database.py       # Chroma access layer
-│   └─ utils.py          # Tag/asset helpers
-├─ data/
-│   ├─ chroma_data/      # Persistent vector store (server mode)
-│   ├─ tags_config.json  # Tag palette + descriptions
-│   └─ failed_searches.csv
-└─ images/               # Uploaded assets grouped per tag
+FA-FaQ/
+├── app/
+│   ├── Kernel.py              # FastAPI app factory + lifespan
+│   ├── ports/                 # Abstract interfaces (EmbeddingPort, VectorStorePort, etc.)
+│   ├── generative/engine.py   # Gemini adapters (Embedding + Chat)
+│   ├── controllers/           # API route handlers
+│   ├── services/              # Business logic (search, FAQ, bot, agent)
+│   └── schemas/               # Pydantic models
+├── config/
+│   ├── container.py           # Dependency wiring (swap adapters here)
+│   ├── chromaDb.py            # ChromaDB adapter
+│   ├── messaging.py           # WPPConnect adapter
+│   ├── settings.py            # Environment variables
+│   └── routes.py              # Route registration
+├── streamlit_apps/
+│   ├── user_app.py            # User search interface
+│   ├── admin_app.py           # Admin CRUD console
+│   └── bot_tester.py          # Bot logic simulator
+├── main.py                    # Unified entry point
+└── docker-compose.yml         # Full stack deployment
 ```
 
 ---
 
-## ⚙️ Setup
+## 🚀 Quick Start
 
-1. **Python deps**
-   ```bash
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+### Prerequisites
+- Python 3.10+
+- Docker & Docker Compose
+- Google Gemini API Key
 
-2. **Environment variables (`.env`)**
-   ```ini
-   GOOGLE_API_KEY=your_gemini_key
-   ADMIN_PASSWORD=supersecret
-   BOT_MIN_SCORE=80
-   BOT_MIN_GAP=10
-   WA_BASE_URL=http://wppconnect:21465
-   WA_SESSION_KEY=THISISMYSECURETOKEN
-   # Optional (auto-switch to Chroma server mode)
-   CHROMA_HOST=chroma-server
-   CHROMA_PORT=8000
-   ```
+### 1. Setup Environment
 
-3. **Initial tag palette**
-   If `data/tags_config.json` is absent, the app seeds ED/OPD/IPD/Umum defaults. Edit via the admin console Config tab.
-
----
-
-## 🚀 Running the Apps (local)
-
-| Service | Command | Default Port |
-| --- | --- | --- |
-| User Streamlit | `streamlit run app.py --server.port 8501` | 8501 |
-| Admin Streamlit | `streamlit run admin.py --server.port 8502` | 8502 |
-| WhatsApp Bot API | `uvicorn bot_wa:app --host 0.0.0.0 --port 8000 --reload` | 8000 |
-| Web V2 (FastAPI) | `uvicorn web_v2.main:app --host 0.0.0.0 --port 8080 --reload` | 8080 |
-
-Static assets for Web V2 are served from `web_v2/static` and `/images` is mounted to expose uploaded media.
-
----
-
-## 🐳 Docker / Compose
-
-1. **Single container** (`Dockerfile`) exposes 8501/8502/8000. Override the default CMD via `docker compose`.
-2. **Recommended multi-service layout** (see `Dokumentasi.md`): add a dedicated `chroma-server` service and mount `./data/chroma_data:/chroma/chroma`. Ensure every app service declares `depends_on: chroma-server`, shares the same network, and loads `.env`.
-
-Restart steps after schema update / corruption recovery:
 ```bash
-docker compose down
-rm -rf data/faq_db
+git clone https://github.com/RafiASKing/FA-FaQ.git
+cd FA-FaQ
+
+python -m venv venv
+.\venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+
+cp .env.example .env
+# Edit .env with your GOOGLE_API_KEY
+```
+
+### 2. Start ChromaDB
+
+```bash
+docker compose up chroma-server -d
+```
+
+### 3. Run Apps
+
+```bash
+# API Server
+python main.py api --port 8001
+
+# Web Frontend
+python main.py web
+
+# Streamlit Apps (set PYTHONPATH first on Windows)
+$env:PYTHONPATH="."
+streamlit run streamlit_apps/user_app.py --server.port 8501
+streamlit run streamlit_apps/admin_app.py --server.port 8502
+streamlit run streamlit_apps/bot_tester.py --server.port 8503
+```
+
+### Access Points
+
+| Service | URL |
+|---------|-----|
+| API Docs | http://localhost:8001/docs |
+| Web Search | http://localhost:8080 |
+| User App | http://localhost:8501 |
+| Admin Console | http://localhost:8502 |
+| Bot Tester | http://localhost:8503 |
+
+---
+
+## 🐳 Docker Deployment
+
+```bash
+# Full stack (Linux/Lightsail)
 docker compose up --build -d
+
+# Partial stack (Windows - skip WPPConnect)
+docker compose up --build -d chroma-server faq-web-v2 faq-admin faq-user
 ```
 
 ---
 
-## 🧠 Search Logic Primer
-1. **Embedding format** – HyDE template ensures consistent semantic signals:
-   ```
-   DOMAIN: {tag + desc}
-   DOKUMEN: {judul}
-   VARIASI PERTANYAAN USER: {keyword}
-   ISI KONTEN: {cleaned answer}
-   ```
-2. **Two-phase retrieval**
-   - Search Mode: `database.search_faq()` pre-filters by tag via Chroma `where`, applies score threshold, and keeps Top-3.
-   - Browse Mode: `database.get_all_faqs_sorted()` streams newest 10 with pagination counters.
-3. **Safety nets**
-   - Confidence badges tinted by score bands (Streamlit + Web V2).
-   - No-result CTA logs queries to `failed_searches.csv` and surfaces WhatsApp escalation.
+## 🔌 Swapping Providers
+
+The architecture makes it easy to swap external dependencies:
+
+| To Change | Steps |
+|-----------|-------|
+| **Embedding Model** | Create adapter in `app/generative/`, update `container.get_embedding()` |
+| **LLM Provider** | Create adapter implementing `LLMPort`, update `container.get_llm()` |
+| **Vector Database** | Create `config/newDb.py`, update `container.get_vector_store()` |
+| **Messaging** | Create adapter implementing `MessagingPort`, update `container.get_messaging()` |
 
 ---
 
-## 🛠️ Admin Workflow Cheatsheet
-1. **Drafting**
-   - Use toolbar buttons in [`admin.py`](admin.py) to inject bold/list/`[GAMBAR X]`.
-   - Upload images; they persist under `images/<TAG>/...` with sanitized filenames.
-2. **Preview Mode**
-   - Renders inline image placeholders exactly like the user app.
-3. **Publishing**
-   - Calls [`src/database.upsert_faq`](src/database.py) (auto ID, tag metadata enrichment, cached Gemini embedding).
-4. **Edit/Delete**
-   - Update form loads via cached DataFrame (`database.get_all_data_as_df`) and keeps destructive actions visually secondary.
-   - Deletion cascades to filesystem via [`database.delete_faq`](src/database.py).
+## 🤖 WhatsApp Bot
+
+The bot responds to:
+- **Private chats**: Always replies
+- **Groups**: Only when mentioned with `@faq`
+
+Test bot logic locally without WPPConnect using the **Bot Tester** Streamlit app.
 
 ---
 
-## 📱 WhatsApp Bot Notes
-- Endpoint: `/webhook` in [`bot_wa.py`](bot_wa.py) expects payload from WPPConnect/Fonnte and triggers `process_logic`.
-- Selective reply rules:
-  - Always respond to private chats.
-  - In groups, require `@faq`, mention, or trap keywords (“admin”, “tolong”, “tanya”, “help”).
-- Media handling:
-  - `[GAMBAR X]` tokens convert to inline captions; actual files sent asynchronously if stored.
+## 📚 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [LOCAL_DEV_GUIDE.md](docs/LOCAL_DEV_GUIDE.md) | Detailed local development instructions |
+| [MEMORY.md](docs/MEMORY.md) | Quick reference for project conventions |
+| [REFACTORING_V2.1](docs/REFACTORING_V2.1_PORTS_ADAPTERS.md) | Ports & Adapters architecture details |
+| [REFACTORING_V2.2](docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md) | Windows fixes & Bot Tester |
 
 ---
 
-## 🧰 Troubleshooting
+## 🛠️ Tech Stack
 
-| Issue | Symptom | Fix |
-| --- | --- | --- |
-| Vector DB desync (`chromadb.errors.InternalError: Error finding id`) | Searches fail after concurrent writes. | Restart services; if using embedded mode, migrate to server mode (see “Langkah 1-3” section in [`Dokumentasi.md`](Dokumentasi.md)). |
-| SQLite lock / slow writes | Admin save stalls. | Ensure `retry_on_lock` decorator remains on write paths and avoid running admin/user containers against the same file backend. |
-| Images missing in Web V2 | Broken `<img>` tags. | Confirm `/images` mount is configured and paths stored via `utils.save_uploaded_images`. |
-| WhatsApp auth expired | `Bearer` token invalid. | Trigger `generate_token()` or restart bot service to refresh `CURRENT_TOKEN`. |
+- **Backend**: FastAPI, Uvicorn
+- **Vector DB**: ChromaDB
+- **Embeddings**: Google Gemini (`google-genai`)
+- **LLM**: Google Gemini via LangChain (`langchain-google-genai`)
+- **Frontend**: Streamlit, Jinja2 Templates
+- **Messaging**: WPPConnect (WhatsApp)
+- **Deployment**: Docker Compose, AWS Lightsail
 
 ---
 
-## 📎 Further Reading
-- Full ADR & incident postmortem: [`Dokumentasi.md`](Dokumentasi.md)
-- Palette & tag governance: [`data/tags_config.json`](data/tags_config.json)
-- Sample combined script for LLM fine-tuning: [`single_script_for_llm.txt`](single_script_for_llm.txt)
+## 📄 License
 
-Happy shipping! 🔧
+MIT
+
+---
+
+Built with ❤️ for hospital knowledge management.
