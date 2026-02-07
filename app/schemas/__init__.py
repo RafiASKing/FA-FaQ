@@ -16,15 +16,17 @@ from .webhook_schema import (
     WhatsAppWebhookPayload,
     WebhookResponse
 )
+from .agent_schema import RerankOutput
 
 __all__ = [
     'FaqCreate',
-    'FaqUpdate', 
+    'FaqUpdate',
     'FaqResponse',
     'FaqListResponse',
     'SearchRequest',
     'SearchResponse',
     'SearchResultItem',
     'WhatsAppWebhookPayload',
-    'WebhookResponse'
+    'WebhookResponse',
+    'RerankOutput',
 ]

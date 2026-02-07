@@ -23,6 +23,7 @@ IMAGE_QUALITY = 70                # JPEG quality (0-100)
 # === DATABASE ===
 COLLECTION_NAME = "faq_universal_v1"  # Nama collection ChromaDB
 EMBEDDING_MODEL = "models/gemini-embedding-001"  # Model embedding Google
+LLM_MODEL = "gemini-2.5-flash"                    # Model LLM untuk agent mode (reranking)
 
 # === RETRY LOGIC ===
 MAX_RETRIES = 10                  # Max retry untuk database lock
