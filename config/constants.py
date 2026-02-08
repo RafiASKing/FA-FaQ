@@ -23,7 +23,13 @@ IMAGE_QUALITY = 70                # JPEG quality (0-100)
 # === EMBEDDING & LLM ===
 EMBEDDING_MODEL = "models/gemini-embedding-001"  # Model embedding Google
 EMBEDDING_DIMENSION = 3072                       # Dimension for gemini-embedding-001
-LLM_MODEL = "gemini-2.5-flash"                   # Model LLM untuk agent mode (reranking)
+LLM_MODEL = "gemini-3-flash-preview"             # Model LLM untuk agent mode (default)
+LLM_MODEL_PRO = "gemini-3-pro-preview"           # Model LLM untuk high-precision mode
+
+# === AGENT MODE ===
+AGENT_CANDIDATE_LIMIT = 20                       # Top N candidates for LLM grading
+AGENT_MIN_SCORE = 20.0                           # Minimum relevancy % for agent candidates
+AGENT_CONFIDENCE_THRESHOLD = 0.3                 # Minimum confidence to accept grader result
 
 # === STREAMLIT COLOR MAPPING ===
 # Mapping HEX code ke nama warna Streamlit

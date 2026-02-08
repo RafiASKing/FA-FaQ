@@ -21,6 +21,7 @@ from core.image_handler import ImageHandler
 from core.content_parser import ContentParser
 from core.logger import log_failed_search, clear_failed_search_log
 from core.group_config import GroupConfig
+from core.bot_config import BotConfig
 from config.settings import settings, paths
 from config.constants import COLOR_PALETTE
 
@@ -487,3 +488,65 @@ with tab6:
                 st.toast("Grup telah dihapus.", icon="🗑️")
                 time.sleep(1)
                 st.rerun()
+    
+    st.divider()
+    
+    # === BOT SETTINGS ===
+    st.subheader("🤖 Bot Settings")
+    
+    current_mode = BotConfig.get_search_mode()
+    
+    col_mode, col_info = st.columns([1, 2])
+    
+    with col_mode:
+        mode_options = {
+            "immediate": "⚡ Immediate (Top 1)",
+            "agent": "🧠 Agent (LLM Grader)"
+        }
+        
+        selected_mode = st.radio(
+            "Search Mode",
+            options=list(mode_options.keys()),
+            format_func=lambda x: mode_options[x],
+            index=0 if current_mode == "immediate" else 1,
+            key="search_mode_radio"
+        )
+        
+        if selected_mode != current_mode:
+            if st.button("💾 Save Mode", use_container_width=True):
+                BotConfig.set_search_mode(selected_mode)
+                st.toast(f"✅ Search mode changed to: {mode_options[selected_mode]}", icon="🤖")
+                time.sleep(0.5)
+                st.rerun()
+    
+    with col_info:
+        if current_mode == "immediate":
+            st.info("""
+            **⚡ Immediate Mode**
+            - Returns top 1 result with 41% relevancy threshold
+            - Fastest response (~200ms)
+            - Good for most use cases
+            """)
+        else:
+            st.success("""
+            **🧠 Agent Mode**
+            - LLM grades top 20 candidates
+            - Better accuracy for complex questions
+            - Slower (~2-3s) but more intelligent
+            """)
+            
+            # Confidence threshold slider
+            threshold = BotConfig.get_confidence_threshold()
+            new_threshold = st.slider(
+                "Confidence Threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=threshold,
+                step=0.1,
+                help="Minimum confidence for LLM to accept a match"
+            )
+            
+            if new_threshold != threshold:
+                if st.button("💾 Save Threshold", key="save_threshold"):
+                    BotConfig.set_confidence_threshold(new_threshold)
+                    st.toast(f"✅ Threshold set to {new_threshold}", icon="⚙️")

@@ -7,9 +7,11 @@ from fastapi import APIRouter, Request, BackgroundTasks
 
 from app.schemas import WebhookResponse
 from app.services import WhatsAppService, SearchService
+from app.services.agent_service import AgentService
 from core.content_parser import ContentParser
 from core.logger import log, log_failed_search
 from core.group_config import GroupConfig, is_group_message
+from core.bot_config import BotConfig
 from config.settings import settings
 from config.constants import RELEVANCE_THRESHOLD
 
@@ -83,19 +85,29 @@ class WebhookController:
             return
         
         # Send acknowledgment immediately (reduces perceived latency)
-        WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu,...")
+        search_mode = BotConfig.get_search_mode()
+        if search_mode == "agent":
+            WhatsAppService.send_text(remote_jid, "🧠 Menganalisis pertanyaan...")
+        else:
+            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu,...")
         
-        log(f"🔍 Mencari: '{clean_query}'")
+        log(f"🔍 Mencari: '{clean_query}' (mode: {search_mode})")
         
-        # Search with module filter
+        # Search with mode selection
         try:
-            results = SearchService.search_for_bot(
-                clean_query,
-                allowed_modules=allowed_modules
-            )
+            if search_mode == "agent":
+                # Agent mode: LLM grading
+                result = AgentService.grade_search(clean_query, allowed_modules)
+                results = [result] if result else []
+            else:
+                # Immediate mode: Direct top-1 retrieval
+                results = SearchService.search_for_bot(
+                    clean_query,
+                    allowed_modules=allowed_modules
+                )
         except Exception as e:
-            log(f"❌ Database error: {e}")
-            WhatsAppService.send_text(remote_jid, "Maaf, database sedang gangguan.")
+            log(f"❌ Search error: {e}")
+            WhatsAppService.send_text(remote_jid, "Maaf, terjadi gangguan saat mencari.")
             return
         
         web_url = settings.web_v2_url
@@ -113,7 +125,9 @@ class WebhookController:
         top_result = results[0]
         score = top_result.score
         
-        if score < RELEVANCE_THRESHOLD:
+        # Threshold check ONLY for immediate mode
+        # Agent mode already filtered by LLM confidence, so trust the result
+        if search_mode == "immediate" and score < RELEVANCE_THRESHOLD:
             log_failed_search(clean_query)
             
             msg = f"Maaf, belum ada data yang cocok.\n\n"
@@ -121,8 +135,10 @@ class WebhookController:
             WhatsAppService.send_text(remote_jid, msg)
             return
         
-        # Build response
-        if score >= 60:
+        # Build response header
+        if search_mode == "agent":
+            header = f"🧠 Relevansi: {score:.0f}%\n"
+        elif score >= 60:
             header = f"Relevansi: {score:.0f}%\n"
         else:
             header = f"[Relevansi Rendah: {score:.0f}%]\n"

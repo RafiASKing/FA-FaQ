@@ -3,19 +3,23 @@ Bot Tester - Streamlit app untuk simulasi WhatsApp Bot.
 
 Simulasi bot logic tanpa perlu WPPConnect:
 - Test private message vs group mode
+- Test immediate vs agent mode
 - Preview response yang akan dikirim bot
 - Preview gambar yang akan di-attach
 """
 
 import streamlit as st
 import os
+import time
 
 # Import services directly (bypass webhook + WPPConnect)
 from app.services.whatsapp_service import BotLogicService
 from app.services.search_service import SearchService
+from app.services.agent_service import AgentService
 from core.content_parser import ContentParser
 from core.tag_manager import TagManager
 from core.image_handler import ImageHandler
+from core.bot_config import BotConfig
 from config.constants import BOT_TOP_RESULTS
 
 
@@ -26,12 +30,12 @@ st.set_page_config(
 )
 
 st.title("🤖 WhatsApp Bot Tester")
-st.caption("Simulasi bot tanpa WPPConnect — No errors, pure logic testing!")
+st.caption("Simulasi bot tanpa WPPConnect — supports Immediate & Agent mode!")
 
 st.markdown("---")
 
 # === INPUT SECTION ===
-col1, col2 = st.columns([3, 1])
+col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
     message = st.text_input(
@@ -41,14 +45,25 @@ with col1:
     )
 
 with col2:
-    mode = st.radio(
-        "Mode:",
+    chat_mode = st.radio(
+        "Chat Mode:",
         ["Private", "Group"],
         horizontal=True
     )
 
+with col3:
+    # Get current global mode
+    global_mode = BotConfig.get_search_mode()
+    search_mode = st.radio(
+        "Search Mode:",
+        ["⚡ Immediate", "🧠 Agent"],
+        index=0 if global_mode == "immediate" else 1,
+        horizontal=True
+    )
+    use_agent = "Agent" in search_mode
+
 # Additional options for group mode
-if mode == "Group":
+if chat_mode == "Group":
     st.info("💡 Di grup, bot hanya reply jika ada `@faq` di pesan atau di-mention langsung")
 
 # === PROCESS BUTTON ===
@@ -56,7 +71,7 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
     if not message.strip():
         st.warning("⚠️ Ketik pesan dulu!")
     else:
-        is_group = (mode == "Group")
+        is_group = (chat_mode == "Group")
         
         # Step 1: Check if bot should reply
         should_reply = BotLogicService.should_reply_to_message(
@@ -68,10 +83,12 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
         st.markdown("---")
         st.subheader("📊 Bot Analysis")
         
-        col_a, col_b = st.columns(2)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.metric("Mode", "🏠 Private" if not is_group else "👥 Group")
+            st.metric("Chat Mode", "🏠 Private" if not is_group else "👥 Group")
         with col_b:
+            st.metric("Search Mode", "🧠 Agent" if use_agent else "⚡ Immediate")
+        with col_c:
             if should_reply:
                 st.metric("Decision", "✅ Will Reply")
             else:
@@ -87,9 +104,20 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
         clean_query = BotLogicService.clean_query(message)
         st.info(f"🔍 **Query bersih:** `{clean_query}`")
         
-        # Step 3: Search
-        with st.spinner("Mencari di database..."):
-            results = SearchService.search_for_bot(clean_query, top_n=BOT_TOP_RESULTS)
+        # Step 3: Search (with mode selection)
+        if use_agent:
+            with st.spinner("🧠 Menganalisis dengan LLM..."):
+                start_time = time.time()
+                result = AgentService.grade_search(clean_query)
+                elapsed = time.time() - start_time
+                results = [result] if result else []
+            st.success(f"⏱️ Agent mode took {elapsed:.2f}s")
+        else:
+            with st.spinner("⚡ Mencari di database..."):
+                start_time = time.time()
+                results = SearchService.search_for_bot(clean_query, top_n=BOT_TOP_RESULTS)
+                elapsed = time.time() - start_time
+            st.info(f"⏱️ Immediate mode took {elapsed:.2f}s")
         
         st.markdown("---")
         st.subheader("📥 Bot Response Preview")

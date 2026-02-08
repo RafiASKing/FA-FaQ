@@ -111,6 +111,7 @@ ISI KONTEN: {clean_jawaban}"""
     def generate_query_embedding(query: str) -> List[float]:
         """
         Generate embedding untuk query pencarian.
+        Uses RETRIEVAL_QUERY task type for optimal query-document matching.
 
         Args:
             query: Query pencarian user
@@ -118,7 +119,7 @@ ISI KONTEN: {clean_jawaban}"""
         Returns:
             List of float (embedding vector)
         """
-        return container.get_embedding().embed(query)
+        return container.get_embedding().embed(query, task_type="RETRIEVAL_QUERY")
 
 
 # Singleton instance untuk kemudahan import

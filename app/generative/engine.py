@@ -30,14 +30,20 @@ class GeminiEmbeddingAdapter(EmbeddingPort):
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
-    def embed(self, text: str) -> List[float]:
-        """Generate embedding vector using Google Gemini."""
+    def embed(self, text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> List[float]:
+        """
+        Generate embedding vector using Google Gemini.
+        
+        Args:
+            text: Text to embed
+            task_type: "RETRIEVAL_DOCUMENT" for indexing, "RETRIEVAL_QUERY" for searching
+        """
         from google.genai import types
         try:
             response = self._client.models.embed_content(
                 model=self._model,
                 contents=text,
-                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                config=types.EmbedContentConfig(task_type=task_type),
             )
             return response.embeddings[0].values
         except Exception as e:
@@ -52,7 +58,7 @@ class GeminiChatAdapter(LLMPort):
 
     Args:
         api_key: Google API key.
-        model: Chat model name (e.g. "gemini-2.5-flash").
+        model: Chat model name (e.g. "gemini-3.0-flash").
     """
 
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):

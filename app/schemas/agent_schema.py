@@ -16,14 +16,25 @@ from typing import List, Optional
 # Used with: llm.with_structured_output(RerankOutput)
 
 class RerankOutput(BaseModel):
-    """Output dari reranking LLM — which FAQs best answer the question."""
-    selected_ids: List[str] = Field(
-        default_factory=list,
-        description="ID dokumen FAQ yang paling relevan, urut dari paling relevan"
-    )
+    """
+    Grader output - LLM picks the best document from candidates.
+    
+    Chain-of-thought pattern: reasoning FIRST, then decision.
+    This improves accuracy by forcing the LLM to think before answering.
+    """
     reasoning: str = Field(
         default="",
-        description="Alasan singkat pemilihan dokumen"
+        description="Chain of thought: analisis kandidat dan alasan pemilihan dokumen terbaik"
+    )
+    best_id: str = Field(
+        default="0",
+        description="ID dokumen terbaik yang menjawab pertanyaan, atau '0' jika tidak ada yang cocok"
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Tingkat keyakinan pemilihan (0-1). 0.0-0.3=low, 0.4-0.6=medium, 0.7-1.0=high"
     )
 
 
@@ -37,3 +48,4 @@ class RerankOutput(BaseModel):
 # class QueryRefinement(BaseModel):
 #     refined_query: str = Field(...)
 #     filter_tag: Optional[str] = Field(default=None)
+

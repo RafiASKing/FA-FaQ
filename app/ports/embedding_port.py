@@ -16,12 +16,13 @@ class EmbeddingPort(ABC):
     """
 
     @abstractmethod
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> List[float]:
         """
         Convert text to a vector embedding.
 
         Args:
             text: Raw text to embed.
+            task_type: "RETRIEVAL_DOCUMENT" for indexing, "RETRIEVAL_QUERY" for searching
 
         Returns:
             List of floats representing the embedding vector.
