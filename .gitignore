@@ -43,3 +43,11 @@ Thumbs.db
 
 # Tambahkan baris ini di file .gitignore
 nul
+data/typesense_data/db/LOG
+data/typesense_data/meta/LOG
+
+
+# semua folder data
+data/chroma_data/*
+data/typesense_data/*
+data/failed_searches.csv
