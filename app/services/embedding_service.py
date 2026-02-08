@@ -31,28 +31,21 @@ class EmbeddingService:
         return container.get_embedding().embed(text)
 
     @classmethod
-    def generate_faq_embedding(
+    def _build_document_text(
         cls,
         tag: str,
         judul: str,
         jawaban: str,
         keywords: str
-    ) -> List[float]:
+    ) -> str:
         """
-        Generate embedding untuk dokumen FAQ menggunakan format HyDE.
-
-        Format HyDE membantu menjembatani semantic gap antara:
-        - Bahasa formal dokumentasi
-        - Bahasa user yang panik/informal
-
-        Args:
-            tag: Tag/modul (ED, OPD, IPD, dll)
-            judul: Judul FAQ
-            jawaban: Isi jawaban
-            keywords: Variasi pertanyaan user
-
-        Returns:
-            List of float (embedding vector)
+        Build document text for embedding (single source of truth).
+        
+        Template:
+            MODUL: {tag} ({tag_description})
+            TOPIK: {judul}
+            TERKAIT: {keywords}
+            ISI KONTEN: {clean_jawaban}
         """
         # Bersihkan jawaban dari tag [GAMBAR X]
         clean_jawaban = ContentParser.clean_for_embedding(jawaban)
@@ -66,13 +59,53 @@ class EmbeddingService:
         # Buat domain string
         domain_str = f"{tag} ({tag_desc})" if tag_desc else tag
 
-        # Format HyDE
-        text_embed = f"""DOMAIN: {domain_str}
-DOKUMEN: {judul}
-VARIASI PERTANYAAN USER: {keywords}
+        # Format HyDE (single source of truth!)
+        return f"""MODUL: {domain_str}
+TOPIK: {judul}
+TERKAIT: {keywords}
 ISI KONTEN: {clean_jawaban}"""
 
+    @classmethod
+    def generate_faq_embedding(
+        cls,
+        tag: str,
+        judul: str,
+        jawaban: str,
+        keywords: str
+    ) -> List[float]:
+        """
+        Generate embedding untuk dokumen FAQ menggunakan format HyDE.
+
+        Args:
+            tag: Tag/modul (ED, OPD, IPD, dll)
+            judul: Judul FAQ
+            jawaban: Isi jawaban
+            keywords: Keywords/terms terkait
+
+        Returns:
+            List of float (embedding vector)
+        """
+        text_embed = cls._build_document_text(tag, judul, jawaban, keywords)
         return container.get_embedding().embed(text_embed)
+
+    @classmethod
+    def build_faq_document(
+        cls,
+        tag: str,
+        judul: str,
+        jawaban: str,
+        keywords: str
+    ) -> tuple[List[float], str]:
+        """
+        Build FAQ document: generate embedding AND document text.
+        Use this when you need both (e.g., upsert to vector store).
+
+        Returns:
+            Tuple of (embedding_vector, document_text)
+        """
+        text_embed = cls._build_document_text(tag, judul, jawaban, keywords)
+        embedding = container.get_embedding().embed(text_embed)
+        return embedding, text_embed
 
     @staticmethod
     def generate_query_embedding(query: str) -> List[float]:

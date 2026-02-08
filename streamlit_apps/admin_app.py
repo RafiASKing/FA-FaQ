@@ -20,6 +20,7 @@ from core.tag_manager import TagManager
 from core.image_handler import ImageHandler
 from core.content_parser import ContentParser
 from core.logger import log_failed_search, clear_failed_search_log
+from core.group_config import GroupConfig
 from config.settings import settings, paths
 from config.constants import COLOR_PALETTE
 
@@ -61,8 +62,8 @@ if 'draft_data' not in st.session_state:
     st.session_state.draft_data = {}
 
 # Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Database", "➕ New FaQ", "✏️ Edit/Delete FaQ", "⚙️ Config Tags", "📈 Analytics"
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 Database", "➕ New FaQ", "✏️ Edit/Delete FaQ", "⚙️ Config Tags", "📈 Analytics", "🏢 Group Settings"
 ])
 
 
@@ -419,3 +420,70 @@ with tab5:
             st.dataframe(df_log, use_container_width=True)
     else:
         st.info("Belum ada data pencarian gagal. Sistem bekerja dengan baik!")
+
+
+# === TAB 6: GROUP SETTINGS ===
+with tab6:
+    st.subheader("🏢 Pengaturan Grup WhatsApp")
+    st.caption("Atur modul yang diizinkan untuk setiap grup. Grup otomatis terdaftar saat pertama kali mention @faq.")
+    
+    groups = GroupConfig.get_all_groups()
+    available_modules = ["all"] + list(tags_map.keys())
+    
+    if not groups:
+        st.info("Belum ada grup terdaftar. Grup akan otomatis muncul setelah mention @faq pertama.")
+    else:
+        # Sort groups by first_seen descending
+        sorted_groups = sorted(
+            groups.items(), 
+            key=lambda x: x[1].get('first_seen', ''), 
+            reverse=True
+        )
+        
+        for group_id, config in sorted_groups:
+            with st.container(border=True):
+                col_name, col_modules = st.columns([2, 3])
+                
+                with col_name:
+                    st.markdown(f"**{config.get('name', 'Unknown Group')}**")
+                    st.caption(f"`{group_id[:30]}...`")
+                    st.caption(f"📅 First seen: {config.get('first_seen', 'N/A')[:10]}")
+                
+                with col_modules:
+                    current_modules = config.get('allowed_modules', ['all'])
+                    
+                    # Multiselect for allowed modules
+                    new_modules = st.multiselect(
+                        "Allowed Modules",
+                        options=available_modules,
+                        default=current_modules,
+                        key=f"modules_{group_id}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Save button
+                    if st.button("💾 Save", key=f"save_{group_id}", use_container_width=True):
+                        if not new_modules:
+                            new_modules = ["all"]  # Default to all if empty
+                        GroupConfig.set_allowed_modules(group_id, new_modules)
+                        st.toast(f"✅ Saved: {config.get('name')}", icon="✅")
+                        time.sleep(0.5)
+                        st.rerun()
+        
+        st.divider()
+        
+        # Danger Zone: Delete Group
+        with st.expander("🗑️ Hapus Grup dari Daftar", expanded=False):
+            st.warning("⚠️ Menghapus grup akan menghilangkan konfigurasi. Grup akan kembali terdaftar (default: all modules) saat mention @faq lagi.")
+            
+            del_group = st.selectbox(
+                "Pilih Grup",
+                options=list(groups.keys()),
+                format_func=lambda x: groups[x].get('name', x)
+            )
+            
+            if st.button("🔥 Hapus Grup Ini", type="primary"):
+                GroupConfig.delete_group(del_group)
+                st.toast("Grup telah dihapus.", icon="🗑️")
+                time.sleep(1)
+                st.rerun()

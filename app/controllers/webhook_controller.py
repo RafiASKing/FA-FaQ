@@ -9,6 +9,7 @@ from app.schemas import WebhookResponse
 from app.services import WhatsAppService, SearchService
 from core.content_parser import ContentParser
 from core.logger import log, log_failed_search
+from core.group_config import GroupConfig, is_group_message
 from config.settings import settings
 from config.constants import RELEVANCE_THRESHOLD
 
@@ -25,7 +26,8 @@ class WebhookController:
         sender_name: str,
         message_body: str,
         is_group: bool,
-        mentioned_list: list
+        mentioned_list: list,
+        group_name: str = ""
     ):
         """
         Background task untuk memproses pesan masuk.
@@ -39,6 +41,36 @@ class WebhookController:
         
         if not should_reply:
             return
+        
+        # === GROUP MODULE WHITELIST ===
+        allowed_modules = None  # None = all modules (for DM)
+        
+        if is_group and is_group_message(remote_jid):
+            # Get group display name (priority: payload > API > fallback)
+            group_display_name = group_name
+            
+            if not group_display_name:
+                # Try fetching from WPPConnect API
+                try:
+                    from config import container
+                    messaging = container.get_messaging()
+                    api_name = messaging.get_group_name(remote_jid)
+                    if api_name:
+                        group_display_name = api_name
+                        log(f"📛 Got group name from API: {api_name}")
+                except Exception as e:
+                    log(f"⚠️ Failed to get group name from API: {e}")
+            
+            # Ultimate fallback
+            if not group_display_name:
+                group_display_name = f"Group {remote_jid[:20]}..."
+            
+            # Auto-register group on first mention
+            GroupConfig.register_group(remote_jid, group_display_name)
+            
+            # Get allowed modules for this group
+            allowed_modules = GroupConfig.get_allowed_modules(remote_jid)
+            log(f"📋 Group modules: {allowed_modules}")
         
         # Bersihkan query
         clean_query = WhatsAppService.clean_query(message_body)
@@ -55,9 +87,12 @@ class WebhookController:
         
         log(f"🔍 Mencari: '{clean_query}'")
         
-        # Search
+        # Search with module filter
         try:
-            results = SearchService.search_for_bot(clean_query)
+            results = SearchService.search_for_bot(
+                clean_query,
+                allowed_modules=allowed_modules
+            )
         except Exception as e:
             log(f"❌ Database error: {e}")
             WhatsAppService.send_text(remote_jid, "Maaf, database sedang gangguan.")
@@ -153,6 +188,7 @@ class WebhookController:
             sender_name = payload.get_sender_name()
             is_group = payload.is_group_message()
             mentioned_list = payload.get_mentioned_list()
+            group_name = payload.get_group_name()
             
             if not remote_jid:
                 return WebhookResponse(status="ignored", message="No remote JID")
@@ -164,7 +200,8 @@ class WebhookController:
                 sender_name,
                 message_body,
                 is_group,
-                mentioned_list
+                mentioned_list,
+                group_name
             )
             
             return WebhookResponse(status="success", message="Message queued")

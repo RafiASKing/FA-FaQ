@@ -16,12 +16,10 @@ from .constants import (
     # Image Processing
     IMAGE_MAX_WIDTH,
     IMAGE_QUALITY,
-    # Database
-    COLLECTION_NAME,
+    # Embedding & LLM
     EMBEDDING_MODEL,
-    # Retry Logic
-    MAX_RETRIES,
-    RETRY_BASE_DELAY,
+    EMBEDDING_DIMENSION,
+    LLM_MODEL,
     # Color Mappings
     HEX_TO_STREAMLIT_COLOR,
     COLOR_PALETTE,
@@ -45,12 +43,10 @@ __all__ = [
     # Image Processing
     'IMAGE_MAX_WIDTH',
     'IMAGE_QUALITY',
-    # Database
-    'COLLECTION_NAME',
+    # Embedding & LLM
     'EMBEDDING_MODEL',
-    # Retry Logic
-    'MAX_RETRIES',
-    'RETRY_BASE_DELAY',
+    'EMBEDDING_DIMENSION',
+    'LLM_MODEL',
     # Color Mappings
     'HEX_TO_STREAMLIT_COLOR',
     'COLOR_PALETTE',

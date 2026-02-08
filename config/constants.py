@@ -20,14 +20,10 @@ ITEMS_PER_PAGE = 10               # Jumlah item per halaman
 IMAGE_MAX_WIDTH = 1024            # Max width gambar setelah resize (px)
 IMAGE_QUALITY = 70                # JPEG quality (0-100)
 
-# === DATABASE ===
-COLLECTION_NAME = "faq_universal_v1"  # Nama collection ChromaDB
+# === EMBEDDING & LLM ===
 EMBEDDING_MODEL = "models/gemini-embedding-001"  # Model embedding Google
-LLM_MODEL = "gemini-2.5-flash"                    # Model LLM untuk agent mode (reranking)
-
-# === RETRY LOGIC ===
-MAX_RETRIES = 10                  # Max retry untuk database lock
-RETRY_BASE_DELAY = 0.1            # Base delay untuk retry (seconds)
+EMBEDDING_DIMENSION = 3072                       # Dimension for gemini-embedding-001
+LLM_MODEL = "gemini-2.5-flash"                   # Model LLM untuk agent mode (reranking)
 
 # === STREAMLIT COLOR MAPPING ===
 # Mapping HEX code ke nama warna Streamlit

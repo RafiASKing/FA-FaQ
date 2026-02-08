@@ -78,6 +78,18 @@ class WhatsAppWebhookPayload(BaseModel):
             return self.data.get("mentionedJidList", [])
         return self.mentionedJidList or []
     
+    def get_group_name(self) -> str:
+        """Get group name (if group message)."""
+        if self.data:
+            # Try various field names used by WPPConnect
+            return (
+                self.data.get("chat", {}).get("name") or
+                self.data.get("groupName") or
+                self.data.get("notifyName") or
+                ""
+            )
+        return ""
+    
     def is_from_me(self) -> bool:
         """Check apakah pesan dari bot sendiri."""
         if self.data:

@@ -45,20 +45,21 @@ def get_embedding() -> EmbeddingPort:
 def get_vector_store() -> VectorStorePort:
     """
     Get the active vector store adapter.
-    Currently: ChromaDB.
+    Currently: Typesense (Siloam standard).
     To swap: change the import and instantiation below.
     """
     global _vector_store
     if _vector_store is None:
-        from config.settings import settings, paths
-        from config.constants import COLLECTION_NAME
-        from config.chromaDb import ChromaDBVectorStoreAdapter
-
-        _vector_store = ChromaDBVectorStoreAdapter(
-            collection_name=COLLECTION_NAME,
-            host=settings.chroma_host if settings.is_chroma_server_mode else None,
-            port=settings.chroma_port if settings.is_chroma_server_mode else None,
-            persist_path=str(paths.DB_PATH) if not settings.is_chroma_server_mode else None,
+        from config.settings import settings
+        from config.typesenseDb import TypesenseVectorStoreAdapter
+        from config.constants import EMBEDDING_DIMENSION
+        
+        _vector_store = TypesenseVectorStoreAdapter(
+            host=settings.typesense_host,
+            port=settings.typesense_port,
+            api_key=settings.typesense_api_key,
+            collection_name=settings.typesense_collection,
+            embedding_dim=EMBEDDING_DIMENSION,
         )
     return _vector_store
 

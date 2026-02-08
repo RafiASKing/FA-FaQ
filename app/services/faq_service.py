@@ -74,26 +74,13 @@ class FaqService:
         # Determine ID
         final_id = str(doc_id) if doc_id and doc_id != "auto" else cls._get_next_id()
 
-        # Generate embedding dengan format HyDE
-        vector = EmbeddingService.generate_faq_embedding(
+        # Generate embedding AND document text (single source of truth)
+        vector, text_embed = EmbeddingService.build_faq_document(
             tag=tag,
             judul=judul,
             jawaban=jawaban,
             keywords=keywords
         )
-
-        # Build document text (untuk retrieval)
-        from core.content_parser import ContentParser
-        from core.tag_manager import TagManager
-
-        clean_jawaban = ContentParser.clean_for_embedding(jawaban)
-        tag_desc = TagManager.get_tag_description(tag)
-        domain_str = f"{tag} ({tag_desc})" if tag_desc else tag
-
-        text_embed = f"""DOMAIN: {domain_str}
-DOKUMEN: {judul}
-VARIASI PERTANYAAN USER: {keywords}
-ISI KONTEN: {clean_jawaban}"""
 
         # Upsert ke vector store
         store.upsert(

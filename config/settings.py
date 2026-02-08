@@ -23,9 +23,12 @@ class Settings(BaseSettings):
     google_api_key: str = Field(..., alias="GOOGLE_API_KEY")
     admin_password_hash: str = Field(default="admin", alias="ADMIN_PASSWORD_HASH")
     
-    # === CHROMA DB ===
-    chroma_host: str | None = Field(default=None, alias="CHROMA_HOST")
-    chroma_port: int | None = Field(default=None, alias="CHROMA_PORT")
+    
+    # === TYPESENSE ===
+    typesense_host: str = Field(default="localhost", alias="TYPESENSE_HOST")
+    typesense_port: int = Field(default=8118, alias="TYPESENSE_PORT")
+    typesense_api_key: str = Field(default="xyz", alias="TYPESENSE_API_KEY")
+    typesense_collection: str = Field(default="hospital_faq_kb", alias="TYPESENSE_COLLECTION")
     
     # === WHATSAPP BOT ===
     wa_base_url: str = Field(default="http://wppconnect:21465", alias="WA_BASE_URL")
@@ -53,10 +56,7 @@ class Settings(BaseSettings):
             return []
         return [x.strip() for x in self.bot_identities.split(",") if x.strip()]
     
-    @property
-    def is_chroma_server_mode(self) -> bool:
-        """Cek apakah menggunakan ChromaDB server mode."""
-        return bool(self.chroma_host and self.chroma_port)
+
 
 
 class PathSettings:

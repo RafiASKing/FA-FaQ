@@ -175,20 +175,28 @@ class SearchService:
         cls,
         query: str,
         filter_tag: Optional[str] = None,
-        top_n: int = BOT_TOP_RESULTS
+        top_n: int = BOT_TOP_RESULTS,
+        allowed_modules: Optional[List[str]] = None
     ) -> List[SearchResult]:
         """
         Pencarian untuk WhatsApp Bot.
 
         Args:
             query: Query pencarian
-            filter_tag: Filter tag
+            filter_tag: Filter tag (single tag)
             top_n: Jumlah hasil maksimal
+            allowed_modules: List of allowed modules for group filtering.
+                           If None or ["all"], no filtering applied.
 
         Returns:
-            Top N SearchResult
+            Top 1 SearchResult that matches allowed modules
         """
         results = cls.search(query, filter_tag, n_results=top_n)
+        
+        # Apply module whitelist filter
+        if allowed_modules and "all" not in allowed_modules:
+            results = [r for r in results if r.tag in allowed_modules]
+        
         return results[:1]  # Bot hanya return 1 hasil terbaik
 
     @classmethod

@@ -147,3 +147,63 @@ class WPPConnectMessagingAdapter(MessagingPort):
                 count += 1
             time.sleep(delay)
         return count
+
+    def get_chat_info(self, chat_id: str) -> Optional[dict]:
+        """
+        Get chat info (including group name) from WPPConnect.
+        
+        Args:
+            chat_id: Chat/Group JID (e.g., "xxx@g.us")
+            
+        Returns:
+            Dict with chat info or None if failed.
+            For groups, typically contains 'name' or 'subject'.
+        """
+        if not chat_id:
+            return None
+        
+        url = f"{self._base_url}/api/{self._session_name}/chat/{chat_id}"
+        
+        try:
+            r = requests.get(url, headers=self._get_headers(), timeout=10)
+            
+            if r.status_code == 401:
+                self._generate_token()
+                r = requests.get(url, headers=self._get_headers(), timeout=10)
+            
+            if r.status_code in [200, 201]:
+                return r.json()
+            else:
+                log(f"Get chat info failed: {r.status_code}")
+                return None
+                
+        except Exception as e:
+            log(f"Error get chat info: {e}")
+            return None
+
+    def get_group_name(self, group_id: str) -> Optional[str]:
+        """
+        Get group name from WPPConnect.
+        
+        Args:
+            group_id: Group JID (must end with @g.us)
+            
+        Returns:
+            Group name/subject, or None if not found.
+        """
+        if not group_id or "@g.us" not in group_id:
+            return None
+        
+        chat_info = self.get_chat_info(group_id)
+        if not chat_info:
+            return None
+        
+        # Try various field names WPPConnect might use
+        return (
+            chat_info.get("name") or
+            chat_info.get("subject") or
+            chat_info.get("formattedTitle") or
+            chat_info.get("contact", {}).get("name") or
+            None
+        )
+

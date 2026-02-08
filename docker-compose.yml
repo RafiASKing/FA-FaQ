@@ -1,18 +1,19 @@
 version: '3'
 
 services:
-  # --- 1. CHROMA DB ---
-  chroma-server:
-    image: chromadb/chroma:latest
-    container_name: faq_chroma_server
+  # --- 1. TYPESENSE (default) ---
+  typesense:
+    image: typesense/typesense:27.1
+    container_name: faq_typesense
     restart: always
     ports:
-      - "8000:8000"
+      - "8118:8108"
     volumes:
-      - ./data/chroma_data:/data
+      - ./data/typesense_data:/data
     environment:
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=False
+      - TYPESENSE_API_KEY=xyz
+      - TYPESENSE_DATA_DIR=/data
+
   # --- 2. EVOLUTION API ---
   wppconnect:
     container_name: faq_wppconnect
@@ -20,7 +21,7 @@ services:
     # Kita tidak download image, tapi BUILD langsung dari GitHub WPPConnect Resmi.
     # Ini akan download source code dan compile otomatis.
     build: https://github.com/wppconnect-team/wppconnect-server.git
-    
+
     restart: always
     ports:
       - "21465:21465"
@@ -40,14 +41,16 @@ services:
     ports:
       - "8005:8000"
     depends_on:
-      chroma-server:
+      typesense:
         condition: service_started
       wppconnect:
         condition: service_started
     env_file: .env
     environment:
-      - CHROMA_HOST=chroma-server
-      - CHROMA_PORT=8000
+      - VECTOR_DB=typesense
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_API_KEY=xyz
       - WA_BASE_URL=http://wppconnect:21465
       - WA_SESSION_KEY=THISISMYSECURETOKEN
       - PYTHONUNBUFFERED=1
@@ -63,15 +66,17 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - chroma-server
+      - typesense
     volumes:
       - ./data:/app/data
       - ./images:/app/images
       - ./.streamlit:/app/.streamlit
     env_file: .env
     environment:
-      - CHROMA_HOST=chroma-server
-      - CHROMA_PORT=8000
+      - VECTOR_DB=typesense
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_API_KEY=xyz
     command: streamlit run streamlit_apps/user_app.py --server.port=8501 --server.address=0.0.0.0
   # --- 6. ADMIN APP ---
   faq-admin:
@@ -81,15 +86,17 @@ services:
     ports:
       - "8502:8502"
     depends_on:
-      - chroma-server
+      - typesense
     volumes:
       - ./data:/app/data
       - ./images:/app/images
       - ./.streamlit:/app/.streamlit
     env_file: .env
     environment:
-      - CHROMA_HOST=chroma-server
-      - CHROMA_PORT=8000
+      - VECTOR_DB=typesense
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_API_KEY=xyz
     command: streamlit run streamlit_apps/admin_app.py --server.port=8502 --server.address=0.0.0.0
   # --- 7. FRONTEND V2 ---
   faq-web-v2:
@@ -99,13 +106,15 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - chroma-server
+      - typesense
     volumes:
       - ./data:/app/data
       - ./web_v2:/app/web_v2
       - ./images:/app/images
     env_file: .env
     environment:
-      - CHROMA_HOST=chroma-server
-      - CHROMA_PORT=8000
+      - VECTOR_DB=typesense
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_API_KEY=xyz
     command: uvicorn main:web_app --host 0.0.0.0 --port 8080

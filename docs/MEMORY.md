@@ -5,11 +5,10 @@
 - **Ports** (ABCs): `app/ports/embedding_port.py`, `app/ports/vector_store_port.py`, `app/ports/messaging_port.py`, `app/ports/llm_port.py`
 - **Adapters**:
   - `app/generative/engine.py` — GeminiEmbeddingAdapter (google-genai) + GeminiChatAdapter (langchain-google-genai ChatGoogleGenerativeAI)
-  - `config/chromaDb.py` — ChromaDBVectorStoreAdapter (Siloam convention: `config/*Db.py`)
+  - `config/typesenseDb.py` — TypesenseVectorStoreAdapter (Siloam convention: `config/*Db.py`)
   - `config/messaging.py` — WPPConnectMessagingAdapter (external service in `config/`)
 - **Container**: `config/container.py` — lazy singleton factory, `get_embedding()`, `get_vector_store()`, `get_messaging()`, `get_llm()` + `set_*()` for testing
 - **Services** use `from config import container` then `container.get_*()` — no direct dependency on concrete implementations
-- `retry_on_lock` lives ONLY in `config/chromaDb.py` (SQLite concern)
 - `WhatsAppService` is a thin facade delegating to `container.get_messaging()` + `BotLogicService`
 - Routing uses `config/routes.py` `setup_routes(app)` + `routes/api/v1.py` aggregator
 - Middleware uses `config/middleware.py` `setup_middleware(app)`
@@ -17,6 +16,7 @@
 
 ## Key Files
 - `config/container.py` — swap adapters here to change providers
+- `config/typesenseDb.py` — Typesense vector store adapter
 - `config/routes.py` — centralized route registration (Siloam pattern)
 - `config/middleware.py` — middleware setup (Siloam pattern)
 - `app/Kernel.py` — app factory, lifespan manager (preloads all shared resources)
@@ -26,6 +26,14 @@
 - `app/controllers/agent_controller.py` — Siloam-pattern singleton controller for agent mode
 - `config/settings.py` — env vars via Pydantic BaseSettings
 - `config/constants.py` — magic numbers (thresholds, limits, model names)
+
+## Vector Database: Typesense (V2.3+)
+- **Why**: Production-grade, no SQLite locks, Siloam standard
+- **Collection**: `hospital_faq_kb`
+- **Embedding dim**: 3072 (gemini-embedding-001)
+- **Port**: 8118 (external) / 8108 (Docker internal)
+- **API Key**: Set in `.env` as `TYPESENSE_API_KEY`
+- Uses `multi_search` API for large embedding vectors
 
 ## LLM / Agent
 - `LLMPort` has `generate()` (free text) + `generate_structured()` (Pydantic output via `with_structured_output()`)
@@ -38,16 +46,16 @@
 - No "Future TODO" comments — if it can be done now, do it now
 - Siloam alignment is priority (folder layout, patterns, conventions)
 - Preload everything at startup, no cold-start for first user
-- Documentation for session continuity: `docs/REFACTORING_V2.1_PORTS_ADAPTERS.md`, `docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md`
+- Documentation for session continuity: `docs/REFACTORING_V2.1_PORTS_ADAPTERS.md`, `docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md`, `docs/REFACTORING_V2.3_TYPESENSE.md`
 - Always use latest model versions (e.g., `gemini-2.5-flash`)
 
 ## Gotchas
 - Streamlit apps import services directly (not via API)
 - Win32 platform: use `rm` not `del` in bash tool
-- **Local dev uses ChromaDB server mode** — run `docker compose up chroma-server -d` and set `CHROMA_HOST=localhost`, `CHROMA_PORT=8000` in `.env`
-- Embedded ChromaDB mode is NOT recommended — crashes even with `retry_on_lock`
+- **Local dev uses Typesense** — run `docker compose up typesense -d` and set `TYPESENSE_HOST=localhost`, `TYPESENSE_PORT=8118` in `.env`
 - Old top-level `ports/`, `adapters/`, `container.py` were DELETED
 - `config/database.py` was DELETED — absorbed into adapters + container
+- `config/chromaDb.py` was DELETED (V2.3) — replaced by Typesense
 - **Windows: set PYTHONPATH before Streamlit** — `$env:PYTHONPATH=\".\"`
 - **Windows: WPPConnect can't build** — use partial stack or run bot with Python
 - **Bot Tester** (`streamlit_apps/bot_tester.py`) — test bot logic without WPPConnect
