@@ -59,3 +59,18 @@
 - **Windows: set PYTHONPATH before Streamlit** — `$env:PYTHONPATH=\".\"`
 - **Windows: WPPConnect can't build** — use partial stack or run bot with Python
 - **Bot Tester** (`streamlit_apps/bot_tester.py`) — test bot logic without WPPConnect
+
+## Group Module Whitelist (V2.3.1)
+- **Feature**: Per-group module filtering for WhatsApp bot
+- **Storage**: `data/group_config.json`
+- **Service**: `core/group_config.py` — GroupConfig class
+- **Auto-registration**: Groups register on first @faq mention (default: all modules)
+- **Admin UI**: Tab 6 in admin console (`🏢 Group Settings`)
+- **DM behavior**: Always all modules (no filter)
+- **WPPConnect enhancement**: `messaging.get_group_name()` fetches name from API
+
+## Embedding Template (V2.3.1)
+- **Single source**: `EmbeddingService._build_document_text()`
+- **Method**: `EmbeddingService.build_faq_document()` returns `(embedding, document_text)`
+- **Template fields**: `MODUL`, `TOPIK`, `TERKAIT`, `ISI KONTEN`
+

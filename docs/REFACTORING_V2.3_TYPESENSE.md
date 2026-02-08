@@ -173,3 +173,123 @@ docker compose up --build -d typesense faq-web-v2 faq-admin faq-user faq-bot wpp
 | Vector DB | ~300-500 MB | ~50-100 MB |
 | SQLite Overhead | Yes | No |
 | Total (2GB Lightsail) | ⚠️ Tight | ✅ Comfortable |
+
+---
+
+# V2.3.1 Updates (2026-02-08)
+
+## 1. Embedding Template Centralization
+
+### Problem
+Template for embedding documents (`MODUL`, `TOPIK`, `TERKAIT`, `ISI KONTEN`) was duplicated in multiple places.
+
+### Solution
+Centralized template in `EmbeddingService`:
+
+```python
+# app/services/embedding_service.py
+class EmbeddingService:
+    @classmethod
+    def _build_document_text(cls, tag, judul, jawaban, keywords) -> str:
+        """Single source of truth for embedding template."""
+        return f"""MODUL: {tag} ({tag_desc})
+TOPIK: {judul}
+TERKAIT: {keywords}
+ISI KONTEN: {clean_jawaban}"""
+
+    @classmethod
+    def build_faq_document(cls, tag, judul, jawaban, keywords) -> tuple[List[float], str]:
+        """Returns (embedding_vector, document_text)"""
+        text = cls._build_document_text(...)
+        return container.get_embedding().embed(text), text
+```
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `app/services/embedding_service.py` | Added `_build_document_text()`, `build_faq_document()` |
+| `app/services/faq_service.py` | Now uses `EmbeddingService.build_faq_document()` |
+| `scripts/reembed_all.py` | Now uses `EmbeddingService.build_faq_document()` |
+
+---
+
+## 2. Group Module Whitelist
+
+### Feature
+Per-group module filtering for WhatsApp bot. Each group can be configured to only search specific modules.
+
+### Design
+- **Auto-registration**: Groups auto-register on first @faq mention
+- **Default**: All modules allowed
+- **DM (Private)**: Always all modules
+- **Admin UI**: New tab in admin console
+
+### Files Created/Modified
+| File | Change |
+|------|--------|
+| `data/group_config.json` | NEW - JSON storage |
+| `core/group_config.py` | NEW - GroupConfig service |
+| `app/services/search_service.py` | Added `allowed_modules` parameter |
+| `app/controllers/webhook_controller.py` | Added group detection + auto-register |
+| `app/schemas/webhook_schema.py` | Added `get_group_name()` |
+| `streamlit_apps/admin_app.py` | Added **🏢 Group Settings** tab |
+
+### Data Structure
+```json
+{
+  "groups": {
+    "6281xxx@g.us": {
+      "name": "EMR ED - SHKJ",
+      "allowed_modules": ["EMR ED"],
+      "first_seen": "2026-02-08T19:00:00"
+    }
+  }
+}
+```
+
+### Flow
+```
+1. WA message from group → Check if registered
+2. If new → Auto-register with default "all"
+3. Get allowed_modules for group
+4. Filter search results by those modules
+5. Return filtered response
+```
+
+---
+
+## 3. WPPConnect API Enhancement
+
+### Problem
+Group name might not be in webhook payload, making admin UI confusing.
+
+### Solution
+Fetch group name from WPPConnect API with fallback chain:
+
+```
+1. Check payload.get_group_name()
+2. If empty → Call messaging.get_group_name(group_id)
+3. If fails → Use "Group {jid[:20]}..."
+```
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `config/messaging.py` | Added `get_chat_info()`, `get_group_name()` |
+| `app/controllers/webhook_controller.py` | Enhanced group name resolution |
+
+---
+
+## Next: Agent Mode
+
+### Current State
+Agent mode scaffolding already exists:
+- `app/services/agent_service.py` — LLM reranking
+- `app/services/agent_prompts.py` — Prompt templates
+- `app/schemas/agent_schema.py` — RerankOutput schema
+- `/api/v1/agent/rerank` — API endpoint
+
+### Pending
+- Mode switch in admin (global or per-group)
+- Webhook integration to call AgentService
+- Testing via WhatsApp
