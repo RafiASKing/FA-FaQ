@@ -93,7 +93,7 @@ class WebhookController:
         if search_mode == "agent_pro":
             WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu...")
         elif search_mode == "agent":
-            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu..")
+            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu")
         
         log(f"🔍 Mencari: '{clean_query}' (mode: {search_mode})")
         

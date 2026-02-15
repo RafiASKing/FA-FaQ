@@ -22,11 +22,15 @@ class WPPConnectMessagingAdapter(MessagingPort):
         secret_key: Authentication secret key.
     """
 
+    _CHAT_CACHE_TTL = 300  # 5 minutes
+
     def __init__(self, base_url: str, session_name: str, secret_key: str):
         self._base_url = base_url
         self._session_name = session_name
         self._secret_key = secret_key
         self._token: Optional[str] = None
+        self._chat_cache: dict = {}       # {chat_id: name}
+        self._chat_cache_ts: float = 0    # last refresh timestamp
 
     def _get_headers(self) -> dict:
         """Get HTTP headers with auth token. Auto-generates token if missing."""
@@ -148,74 +152,51 @@ class WPPConnectMessagingAdapter(MessagingPort):
             time.sleep(delay)
         return count
 
-    def get_chat_info(self, chat_id: str) -> Optional[dict]:
-        """
-        Get chat info (including group name) from WPPConnect.
+    def _refresh_chat_cache(self) -> None:
+        """Fetch all chats from WPPConnect and cache {id: name}."""
+        url = f"{self._base_url}/api/{self._session_name}/all-chats"
+        try:
+            r = requests.get(url, headers=self._get_headers(), timeout=15)
 
-        Tries multiple endpoints for compatibility across WPPConnect versions:
-        1. /api/{session}/contact/{chatId}  (v2.8+)
-        2. /api/{session}/chat/{chatId}     (older versions)
+            if r.status_code == 401:
+                self._generate_token()
+                r = requests.get(url, headers=self._get_headers(), timeout=15)
 
-        Args:
-            chat_id: Chat/Group JID (e.g., "xxx@g.us")
+            if r.status_code in [200, 201]:
+                raw = r.json()
+                chats = raw.get("response", raw) if isinstance(raw, dict) else raw
 
-        Returns:
-            Dict with chat info or None if failed.
-            For groups, typically contains 'name' or 'subject'.
-        """
-        if not chat_id:
-            return None
-
-        endpoints = [
-            f"{self._base_url}/api/{self._session_name}/contact/{chat_id}",
-            f"{self._base_url}/api/{self._session_name}/chat/{chat_id}",
-        ]
-
-        for url in endpoints:
-            try:
-                r = requests.get(url, headers=self._get_headers(), timeout=10)
-
-                if r.status_code == 401:
-                    self._generate_token()
-                    r = requests.get(url, headers=self._get_headers(), timeout=10)
-
-                if r.status_code in [200, 201]:
-                    data = r.json()
-                    # WPPConnect may wrap response in 'response' key
-                    if isinstance(data, dict) and "response" in data:
-                        return data["response"]
-                    return data
-            except Exception as e:
-                log(f"Error get chat info ({url}): {e}")
-
-        log(f"Get chat info failed for {chat_id}: all endpoints returned error")
-        return None
+                if isinstance(chats, list):
+                    self._chat_cache = {}
+                    for c in chats:
+                        cid = c.get("id", {}).get("_serialized", "")
+                        name = c.get("name") or c.get("subject") or ""
+                        if cid and name:
+                            self._chat_cache[cid] = name
+                    self._chat_cache_ts = time.time()
+                    log(f"Chat cache refreshed: {len(self._chat_cache)} entries")
+            else:
+                log(f"all-chats failed: {r.status_code}")
+        except Exception as e:
+            log(f"Error refreshing chat cache: {e}")
 
     def get_group_name(self, group_id: str) -> Optional[str]:
         """
-        Get group name from WPPConnect.
-        
+        Get group name from WPPConnect via cached all-chats lookup.
+        Cache refreshes every 5 minutes.
+
         Args:
             group_id: Group JID (must end with @g.us)
-            
+
         Returns:
             Group name/subject, or None if not found.
         """
         if not group_id or "@g.us" not in group_id:
             return None
-        
-        chat_info = self.get_chat_info(group_id)
-        if not chat_info:
-            return None
-        
-        # Try various field names across WPPConnect versions
-        return (
-            chat_info.get("name") or
-            chat_info.get("subject") or
-            chat_info.get("formattedTitle") or
-            chat_info.get("pushname") or
-            chat_info.get("contact", {}).get("name") or
-            chat_info.get("groupMetadata", {}).get("subject") or
-            None
-        )
+
+        # Refresh cache if stale or empty
+        if time.time() - self._chat_cache_ts > self._CHAT_CACHE_TTL or not self._chat_cache:
+            self._refresh_chat_cache()
+
+        return self._chat_cache.get(group_id)
 
