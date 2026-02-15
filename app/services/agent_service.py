@@ -22,6 +22,7 @@ from config.constants import (
     AGENT_MIN_SCORE,
 )
 from core.bot_config import BotConfig
+from core.tag_manager import TagManager
 from .search_service import SearchService, SearchResult
 from .agent_prompts import GRADER_SYSTEM_PROMPT, GRADER_USER_PROMPT
 from app.schemas.agent_schema import RerankOutput
@@ -130,15 +131,19 @@ class AgentService:
         candidate_lines = []
         for c in candidates:
             keywords = c.keywords_raw if c.keywords_raw else ""
+            # Get tag description (e.g. "ED" → "IGD, Emergency, Triage, Ambulans")
+            tag_desc = TagManager.get_tag_description(c.tag)
+            module_str = f"{c.tag} ({tag_desc})" if tag_desc else c.tag
+
             line = (
                 f"[ID: {c.id}]\n"
-                f"  Module: {c.tag}\n"
-                f"  Title: {c.judul}\n"
-                f"  Vector Score: {c.score:.1f}%\n"
+                f"  MODUL: {module_str}\n"
+                f"  TOPIK: {c.judul}\n"
+                f"  Skor Vektor: {c.score:.1f}%\n"
             )
             if keywords:
-                line += f"  User Variations (HyDE): {keywords}\n"
-            line += f"  Content: {c.jawaban_tampil}\n"
+                line += f"  TERKAIT: {keywords}\n"
+            line += f"  ISI KONTEN: {c.jawaban_tampil}\n"
             candidate_lines.append(line)
 
         return GRADER_USER_PROMPT.format(

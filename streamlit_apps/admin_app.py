@@ -656,16 +656,17 @@ with tab6:
         elif current_mode == "agent_pro":
             st.warning("""
             **🧠💎 Agent Pro Mode**
-            - Uses Gemini Pro for deeper analysis
+            - Uses Gemini Pro for deeper analysis on top 7 candidates
+            - Full document content + HyDE keywords shown to LLM
             - Most accurate for complex/ambiguous questions
             - Slower (~5-10s), higher API cost
             """)
         else:
             st.success("""
             **🧠 Agent Flash Mode**
-            - LLM grades top 20 candidates
+            - LLM grades top 7 candidates with full content
             - Better accuracy for complex questions
-            - Moderate speed (~2-3s)
+            - Fast (~2-4s)
             """)
             
             # Confidence threshold slider
