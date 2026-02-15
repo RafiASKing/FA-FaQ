@@ -19,7 +19,7 @@ from app.services import FaqService, SearchService
 from core.tag_manager import TagManager
 from core.image_handler import ImageHandler
 from core.content_parser import ContentParser
-from core.logger import log_failed_search, clear_failed_search_log
+from core.logger import log_failed_search, clear_failed_search_log, get_search_log_path, clear_search_log
 from core.group_config import GroupConfig
 from core.bot_config import BotConfig
 from config.settings import settings, paths
@@ -33,13 +33,21 @@ if 'auth' not in st.session_state:
 
 def login():
     """Handle login authentication."""
-    input_bytes = st.session_state.pass_input.encode('utf-8')
-    target_hash = settings.admin_password_hash.encode('utf-8')
+    password = st.session_state.pass_input
+    target = settings.admin_password_hash
 
-    if bcrypt.checkpw(input_bytes, target_hash):
-        st.session_state.auth = True
-    else:
-        st.error("Password salah")
+    try:
+        # Try bcrypt hash comparison first (production)
+        if bcrypt.checkpw(password.encode('utf-8'), target.encode('utf-8')):
+            st.session_state.auth = True
+            return
+    except (ValueError, TypeError):
+        # Not a valid bcrypt hash — fall back to plain-text comparison (dev only)
+        if password == target:
+            st.session_state.auth = True
+            return
+
+    st.error("Password salah")
 
 
 # --- LOGIN SCREEN ---
@@ -103,7 +111,7 @@ with tab2:
         
         try:
             idx_tag = list(tags_map.keys()).index(default_tag)
-        except:
+        except (ValueError, IndexError):
             idx_tag = 0
 
         st.subheader("📝 FaQ/SOP Baru")
@@ -186,7 +194,7 @@ with tab2:
                             st.image(imgs[idx], width=400, caption=f"Gambar {idx+1}")
                         else:
                             st.warning(f"⚠️ [GAMBAR {idx+1}] ditulis tapi file belum diupload.")
-                    except:
+                    except Exception:
                         pass
                 else:
                     if part.strip():
@@ -203,7 +211,7 @@ with tab2:
         with c_save:
             if st.button("💾 PUBLISH KE DATABASE", type="primary", use_container_width=True):
                 try:
-                    with st.spinner("Menyimpan ke ChromaDB..."):
+                    with st.spinner("Menyimpan ke Typesense..."):
                         # Simpan Gambar
                         img_paths = ImageHandler.save_uploaded_images(
                             draft['imgs'], draft['judul'], draft['tag']
@@ -355,7 +363,7 @@ with tab4:
 
     st.divider()
     st.subheader("💾 Backup & Restore")
-    st.caption("Download seluruh data ChromaDB dan gambar.")
+    st.caption("Download seluruh data FAQ dan gambar.")
 
     if st.button("📦 Download Full Backup", key="backup_btn"):
         with st.spinner("Mempersiapkan arsip backup..."):
@@ -400,8 +408,122 @@ with tab4:
 
 # === TAB 5: ANALYTICS ===
 with tab5:
-    st.subheader("📈 Pencarian Gagal (User Feedback)")
-    st.caption("Daftar kata kunci yang dicari User tapi hasilnya tidak relevan.")
+    st.subheader("📈 Analytics Dashboard")
+    st.caption("Statistik penggunaan FAQ bot secara keseluruhan.")
+    
+    search_log_path = get_search_log_path()
+    
+    if search_log_path.exists():
+        df_search = pd.read_csv(search_log_path)
+        df_search['timestamp'] = pd.to_datetime(df_search['timestamp'], errors='coerce')
+        df_search = df_search.dropna(subset=['timestamp'])
+        
+        if not df_search.empty:
+            now = pd.Timestamp.now()
+            today = now.normalize()
+            week_ago = today - pd.Timedelta(days=7)
+            
+            total_queries = len(df_search)
+            today_queries = len(df_search[df_search['timestamp'] >= today])
+            week_queries = len(df_search[df_search['timestamp'] >= week_ago])
+            avg_score = df_search['score'].astype(float).mean()
+            avg_response = df_search['response_ms'].astype(float).mean()
+            
+            # --- KPI Metrics ---
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("📊 Total Queries", f"{total_queries:,}")
+            m2.metric("📅 Today", f"{today_queries:,}")
+            m3.metric("📆 This Week", f"{week_queries:,}")
+            m4.metric("🎯 Avg Score", f"{avg_score:.0f}%")
+            m5.metric("⚡ Avg Response", f"{avg_response:.0f}ms")
+            
+            st.divider()
+            
+            # --- Charts Row ---
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
+                st.markdown("#### 📈 Queries per Day")
+                daily = df_search.set_index('timestamp').resample('D').size().reset_index(name='count')
+                daily = daily.tail(30)  # Last 30 days
+                st.bar_chart(daily.set_index('timestamp')['count'])
+            
+            with chart_col2:
+                st.markdown("#### 🎯 Score Distribution")
+                df_scored = df_search[df_search['score'].astype(float) > 0]
+                if not df_scored.empty:
+                    bins = [0, 50, 70, 75, 85, 100]
+                    labels = ['0-50%', '50-70%', '70-75%', '75-85%', '85-100%']
+                    df_scored = df_scored.copy()
+                    df_scored['bucket'] = pd.cut(df_scored['score'].astype(float), bins=bins, labels=labels, include_lowest=True)
+                    dist = df_scored['bucket'].value_counts().sort_index()
+                    st.bar_chart(dist)
+                else:
+                    st.info("No scored queries yet.")
+            
+            st.divider()
+            
+            # --- Top FAQs & Mode Split ---
+            faq_col, mode_col = st.columns(2)
+            
+            with faq_col:
+                st.markdown("#### 🏆 Top 10 FAQs")
+                top_faqs = df_search[df_search['faq_title'].astype(str) != ''].groupby('faq_title').size().sort_values(ascending=False).head(10)
+                if not top_faqs.empty:
+                    st.dataframe(
+                        top_faqs.reset_index().rename(columns={'faq_title': 'FAQ', 0: 'Hits'}),
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.info("No FAQ hits yet.")
+            
+            with mode_col:
+                st.markdown("#### 🔄 Mode Split")
+                mode_counts = df_search['mode'].value_counts()
+                st.dataframe(
+                    mode_counts.reset_index().rename(columns={'mode': 'Mode', 'count': 'Queries'}),
+                    use_container_width=True, hide_index=True
+                )
+                
+                st.markdown("#### 📡 Source Split")
+                src_counts = df_search['source'].value_counts()
+                st.dataframe(
+                    src_counts.reset_index().rename(columns={'source': 'Source', 'count': 'Queries'}),
+                    use_container_width=True, hide_index=True
+                )
+            
+            st.divider()
+            
+            # --- Recent Queries ---
+            st.markdown("#### 🕐 Recent Queries (last 50)")
+            recent = df_search.sort_values('timestamp', ascending=False).head(50)
+            display_cols = ['timestamp', 'query', 'score', 'faq_title', 'mode', 'response_ms']
+            st.dataframe(
+                recent[display_cols].rename(columns={
+                    'timestamp': 'Time', 'query': 'Query', 'score': 'Score',
+                    'faq_title': 'FAQ', 'mode': 'Mode', 'response_ms': 'ms'
+                }),
+                use_container_width=True, hide_index=True
+            )
+            
+            st.divider()
+            
+            # --- Clear Log ---
+            if st.button("🗑️ Clear Search Log", key="clear_search_log"):
+                clear_search_log()
+                st.toast("Search log cleared.", icon="🗑️")
+                time.sleep(0.5)
+                st.rerun()
+        else:
+            st.info("Search log exists but has no valid data yet.")
+    else:
+        st.info("📊 No search data yet. Data will appear after users start querying the bot.")
+    
+    st.divider()
+    
+    # --- Failed Searches (original section) ---
+    st.subheader("❌ Failed Searches")
+    st.caption("Queries that returned no relevant result.")
     
     log_file = paths.FAILED_SEARCH_LOG
     
@@ -410,17 +532,19 @@ with tab5:
         
         col1, col2 = st.columns([4, 1])
         with col1:
-            st.metric("Total Miss", len(df_log))
+            st.metric("Total Misses", len(df_log))
         with col2:
-            if st.button("🗑️ Clear Log"):
+            if st.button("🗑️ Clear Failed Log"):
                 clear_failed_search_log()
                 st.rerun()
         
         if not df_log.empty:
-            df_log = df_log.sort_values(by="Timestamp", ascending=False)
-            st.dataframe(df_log, use_container_width=True)
+            # Support both old ("Timestamp") and new ("timestamp") header formats
+            ts_col = "timestamp" if "timestamp" in df_log.columns else "Timestamp"
+            df_log = df_log.sort_values(by=ts_col, ascending=False)
+            st.dataframe(df_log, use_container_width=True, hide_index=True)
     else:
-        st.info("Belum ada data pencarian gagal. Sistem bekerja dengan baik!")
+        st.info("No failed searches recorded. System is working well!")
 
 
 # === TAB 6: GROUP SETTINGS ===
@@ -501,14 +625,16 @@ with tab6:
     with col_mode:
         mode_options = {
             "immediate": "⚡ Immediate (Top 1)",
-            "agent": "🧠 Agent (LLM Grader)"
+            "agent": "🧠 Agent Flash",
+            "agent_pro": "🧠💎 Agent Pro (Deeper)"
         }
-        
+        mode_keys = list(mode_options.keys())
+
         selected_mode = st.radio(
             "Search Mode",
-            options=list(mode_options.keys()),
+            options=mode_keys,
             format_func=lambda x: mode_options[x],
-            index=0 if current_mode == "immediate" else 1,
+            index=mode_keys.index(current_mode) if current_mode in mode_keys else 0,
             key="search_mode_radio"
         )
         
@@ -523,16 +649,23 @@ with tab6:
         if current_mode == "immediate":
             st.info("""
             **⚡ Immediate Mode**
-            - Returns top 1 result with 41% relevancy threshold
+            - Returns top 1 result with 70% relevancy threshold
             - Fastest response (~200ms)
             - Good for most use cases
             """)
+        elif current_mode == "agent_pro":
+            st.warning("""
+            **🧠💎 Agent Pro Mode**
+            - Uses Gemini Pro for deeper analysis
+            - Most accurate for complex/ambiguous questions
+            - Slower (~5-10s), higher API cost
+            """)
         else:
             st.success("""
-            **🧠 Agent Mode**
+            **🧠 Agent Flash Mode**
             - LLM grades top 20 candidates
             - Better accuracy for complex questions
-            - Slower (~2-3s) but more intelligent
+            - Moderate speed (~2-3s)
             """)
             
             # Confidence threshold slider

@@ -3,17 +3,19 @@ Webhook Controller - Handler untuk WhatsApp webhook.
 """
 
 import time
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request, BackgroundTasks, Header
+from typing import Optional
 
 from app.schemas import WebhookResponse
 from app.services import WhatsAppService, SearchService
 from app.services.agent_service import AgentService
+from config.middleware import limiter
 from core.content_parser import ContentParser
-from core.logger import log, log_failed_search
+from core.logger import log, log_failed_search, log_search
 from core.group_config import GroupConfig, is_group_message
 from core.bot_config import BotConfig
 from config.settings import settings
-from config.constants import RELEVANCE_THRESHOLD
+from config.constants import RELEVANCE_THRESHOLD, HIGH_RELEVANCE_THRESHOLD
 
 
 router = APIRouter(prefix="/webhook", tags=["Webhook"])
@@ -74,9 +76,11 @@ class WebhookController:
             allowed_modules = GroupConfig.get_allowed_modules(remote_jid)
             log(f"📋 Group modules: {allowed_modules}")
         
-        # Bersihkan query
+        # Bersihkan query dan cap length
         clean_query = WhatsAppService.clean_query(message_body)
-        
+        if clean_query:
+            clean_query = clean_query[:1000]
+
         if not clean_query:
             WhatsAppService.send_text(
                 remote_jid, 
@@ -86,21 +90,23 @@ class WebhookController:
         
         # Send acknowledgment immediately (reduces perceived latency)
         search_mode = BotConfig.get_search_mode()
-        if search_mode == "agent":
+        if search_mode == "agent_pro":
+            WhatsAppService.send_text(remote_jid, "🧠💎 Menganalisis mendalam...")
+        elif search_mode == "agent":
             WhatsAppService.send_text(remote_jid, "🧠 Menganalisis pertanyaan...")
         else:
             WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu,...")
         
         log(f"🔍 Mencari: '{clean_query}' (mode: {search_mode})")
         
-        # Search with mode selection
+        # Search with mode selection + timing
+        t_start = time.time()
         try:
-            if search_mode == "agent":
-                # Agent mode: LLM grading
-                result = AgentService.grade_search(clean_query, allowed_modules)
+            if search_mode in ("agent", "agent_pro"):
+                use_pro = search_mode == "agent_pro"
+                result = AgentService.grade_search(clean_query, allowed_modules, use_pro=use_pro)
                 results = [result] if result else []
             else:
-                # Immediate mode: Direct top-1 retrieval
                 results = SearchService.search_for_bot(
                     clean_query,
                     allowed_modules=allowed_modules
@@ -109,36 +115,64 @@ class WebhookController:
             log(f"❌ Search error: {e}")
             WhatsAppService.send_text(remote_jid, "Maaf, terjadi gangguan saat mencari.")
             return
+        response_ms = int((time.time() - t_start) * 1000)
         
         web_url = settings.web_v2_url
         
         if not results:
-            # Log failed search
-            log_failed_search(clean_query)
-            
+            # Get rejected top-1 for diagnostics (no threshold)
+            rejected = SearchService.search(clean_query, n_results=1, min_score=0)
+            if rejected:
+                r = rejected[0]
+                log_failed_search(
+                    clean_query, reason="below_threshold", mode=search_mode,
+                    top_score=r.score, top_faq_id=r.id, top_faq_title=r.judul,
+                    response_ms=response_ms, source="whatsapp",
+                    detail=f"Best candidate scored {r.score:.1f}%",
+                )
+            else:
+                log_failed_search(
+                    clean_query, reason="no_results", mode=search_mode,
+                    response_ms=response_ms, source="whatsapp",
+                )
+            log_search(clean_query, score=0, mode=search_mode, response_ms=response_ms)
+
             fail_msg = f"Maaf, tidak ditemukan hasil yang relevan untuk: '{clean_query}'\n\n"
             fail_msg += f"Silakan cari manual di: {web_url}"
             WhatsAppService.send_text(remote_jid, fail_msg)
             return
-        
+
         # Ambil hasil terbaik
         top_result = results[0]
         score = top_result.score
-        
+
         # Threshold check ONLY for immediate mode
-        # Agent mode already filtered by LLM confidence, so trust the result
         if search_mode == "immediate" and score < RELEVANCE_THRESHOLD:
-            log_failed_search(clean_query)
+            log_failed_search(
+                clean_query, reason="below_threshold", mode=search_mode,
+                top_score=score, top_faq_id=top_result.id,
+                top_faq_title=top_result.judul, response_ms=response_ms,
+                source="whatsapp",
+                detail=f"Score {score:.1f}% < threshold {RELEVANCE_THRESHOLD}%",
+            )
+            log_search(clean_query, score=score, faq_id=top_result.id,
+                       faq_title=top_result.judul, mode=search_mode, response_ms=response_ms)
             
             msg = f"Maaf, belum ada data yang cocok.\n\n"
             msg += f"Coba tanya lebih spesifik atau cek FaQs lengkap di: {web_url}"
             WhatsAppService.send_text(remote_jid, msg)
             return
         
+        # Log successful search
+        log_search(clean_query, score=score, faq_id=top_result.id,
+                   faq_title=top_result.judul, mode=search_mode, response_ms=response_ms)
+        
         # Build response header
-        if search_mode == "agent":
+        if search_mode == "agent_pro":
+            header = f"🧠💎 Relevansi: {score:.0f}%\n"
+        elif search_mode == "agent":
             header = f"🧠 Relevansi: {score:.0f}%\n"
-        elif score >= 60:
+        elif score >= HIGH_RELEVANCE_THRESHOLD:
             header = f"Relevansi: {score:.0f}%\n"
         else:
             header = f"[Relevansi Rendah: {score:.0f}%]\n"
@@ -183,10 +217,22 @@ class WebhookController:
     
     @staticmethod
     @router.post("/whatsapp", response_model=WebhookResponse)
-    async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
+    @limiter.limit("120/minute")
+    async def whatsapp_webhook(
+        request: Request,
+        background_tasks: BackgroundTasks,
+        x_webhook_secret: Optional[str] = Header(None),
+    ):
         """
         Endpoint untuk menerima webhook dari WPPConnect.
+        Protected by optional WEBHOOK_SECRET header validation.
         """
+        # Validate webhook secret if configured
+        if settings.webhook_secret:
+            if x_webhook_secret != settings.webhook_secret:
+                log("⚠️ Webhook rejected: invalid secret")
+                return WebhookResponse(status="error", message="Invalid webhook secret")
+        
         try:
             body = await request.json()
             

@@ -8,6 +8,7 @@ from typing import Dict, Optional, List
 
 from config.settings import paths
 from config.constants import DEFAULT_TAGS, HEX_TO_STREAMLIT_COLOR, COLOR_PALETTE
+from core.logger import log
 
 
 class TagManager:
@@ -58,7 +59,7 @@ class TagManager:
                 cls._cache_file_mtime = tags_file.stat().st_mtime
                 return cls._cache
         except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️ Error loading tags config: {e}")
+            log(f"Error loading tags config: {e}")
             return DEFAULT_TAGS.copy()
     
     @classmethod
@@ -86,7 +87,7 @@ class TagManager:
             cls._cache_file_mtime = tags_file.stat().st_mtime
             return True
         except IOError as e:
-            print(f"⚠️ Error saving tags config: {e}")
+            log(f"Error saving tags config: {e}")
             return False
     
     @classmethod

@@ -3,11 +3,12 @@ Search Controller - Handler untuk search endpoints.
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, Request, HTTPException
 
 from app.schemas import SearchRequest, SearchResponse, SearchResultItem
 from app.services import SearchService
 from config.constants import WEB_TOP_RESULTS
+from config.middleware import limiter
 
 
 router = APIRouter(prefix="/search", tags=["Search"])
@@ -15,24 +16,26 @@ router = APIRouter(prefix="/search", tags=["Search"])
 
 class SearchController:
     """Controller untuk search operations."""
-    
+
     @staticmethod
     @router.get("", response_model=SearchResponse)
+    @limiter.limit("60/minute")
     async def search_get(
-        q: str = Query(..., description="Query pencarian", min_length=1),
+        request: Request,
+        q: str = Query(..., description="Query pencarian", min_length=1, max_length=1000),
         tag: Optional[str] = Query(default=None, description="Filter tag"),
         limit: int = Query(default=WEB_TOP_RESULTS, ge=1, le=50)
     ) -> SearchResponse:
         """
         Pencarian semantic via GET request.
-        
+
         - **q**: Query pencarian (required)
         - **tag**: Filter berdasarkan tag/modul (optional)
         - **limit**: Jumlah hasil maksimal
         """
         try:
             results = SearchService.search_for_web(q, tag, limit)
-            
+
             return SearchResponse(
                 query=q,
                 filter_tag=tag,
@@ -53,25 +56,26 @@ class SearchController:
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
-    
+
     @staticmethod
     @router.post("", response_model=SearchResponse)
-    async def search_post(request: SearchRequest) -> SearchResponse:
+    @limiter.limit("60/minute")
+    async def search_post(request: Request, body: SearchRequest) -> SearchResponse:
         """
         Pencarian semantic via POST request.
-        
+
         Berguna untuk query yang lebih kompleks atau panjang.
         """
         try:
             results = SearchService.search_for_web(
-                request.query, 
-                request.filter_tag, 
-                request.limit
+                body.query,
+                body.filter_tag,
+                body.limit
             )
-            
+
             return SearchResponse(
-                query=request.query,
-                filter_tag=request.filter_tag,
+                query=body.query,
+                filter_tag=body.filter_tag,
                 total_results=len(results),
                 results=[
                     SearchResultItem(
@@ -89,13 +93,13 @@ class SearchController:
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
-    
+
     @staticmethod
     @router.get("/tags", response_model=List[str])
     async def get_tags() -> List[str]:
         """
         Ambil daftar semua tag yang tersedia.
-        
+
         Berguna untuk populate dropdown filter.
         """
         try:

@@ -139,7 +139,7 @@ with col_f:
     # Ambil tag unik dari DB
     try:
         db_tags = SearchService.get_unique_tags()
-    except:
+    except Exception:
         db_tags = []
     all_tags = ["Semua Modul"] + (db_tags if db_tags else [])
     filter_tag = st.selectbox("Filter:", all_tags)
@@ -208,7 +208,7 @@ if not page_data:
         # Catat query gagal
         try:
             log_failed_search(query)
-        except:
+        except Exception:
             pass
         
         # === CALL TO ACTION ===

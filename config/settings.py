@@ -36,13 +36,14 @@ class Settings(BaseSettings):
     wa_session_name: str = Field(default="mysession", alias="WA_SESSION_NAME")
     bot_identities: str = Field(default="", alias="BOT_IDENTITIES")
     
-    # === BOT LOGIC THRESHOLDS ===
-    bot_min_score: float = Field(default=80.0, alias="BOT_MIN_SCORE")
-    bot_min_gap: float = Field(default=10.0, alias="BOT_MIN_GAP")
-    
     # === WEB CONFIG ===
     web_v2_url: str = Field(default="https://faq-assist.cloud/", alias="WEB_V2_URL")
     wa_support_number: str = Field(default="6289635225253", alias="WA_SUPPORT_NUMBER")
+    
+    # === SECURITY ===
+    cors_origins: str = Field(default="*", alias="CORS_ORIGINS")  # comma-separated
+    webhook_secret: str = Field(default="", alias="WEBHOOK_SECRET")  # empty = no check
+    api_key: str = Field(default="", alias="API_KEY")  # empty = no auth on API endpoints
     
     class Config:
         env_file = ".env"
@@ -55,6 +56,13 @@ class Settings(BaseSettings):
         if not self.bot_identities:
             return []
         return [x.strip() for x in self.bot_identities.split(",") if x.strip()]
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS_ORIGINS string menjadi list."""
+        if not self.cors_origins or self.cors_origins.strip() == "*":
+            return ["*"]
+        return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
     
 
 
@@ -71,17 +79,15 @@ class PathSettings:
         
         # Data paths
         self.DATA_DIR = self.BASE_DIR / "data"
-        self.DB_PATH = self.DATA_DIR / "chroma_data"
         self.TAGS_FILE = self.DATA_DIR / "tags_config.json"
         self.FAILED_SEARCH_LOG = self.DATA_DIR / "failed_searches.csv"
         
         # Assets paths
         self.IMAGES_DIR = self.BASE_DIR / "images"
         
-        # Web V2 paths
-        self.WEB_V2_DIR = self.BASE_DIR / "web_v2"
-        self.TEMPLATES_DIR = self.WEB_V2_DIR / "templates"
-        self.STATIC_DIR = self.WEB_V2_DIR / "static"
+        # Web frontend paths (templates + static at project root)
+        self.TEMPLATES_DIR = self.BASE_DIR / "templates"
+        self.STATIC_DIR = self.BASE_DIR / "static"
         
         # Ensure directories exist
         self._setup_directories()
@@ -90,7 +96,6 @@ class PathSettings:
         """Membuat folder yang diperlukan jika belum ada."""
         self.DATA_DIR.mkdir(exist_ok=True)
         self.IMAGES_DIR.mkdir(exist_ok=True)
-        self.DB_PATH.mkdir(exist_ok=True)
 
 
 # Singleton instances

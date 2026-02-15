@@ -47,7 +47,12 @@ data/typesense_data/db/LOG
 data/typesense_data/meta/LOG
 
 
-# semua folder data
+# === RUNTIME DATA (written at runtime, not source code) ===
 data/chroma_data/*
 data/typesense_data/*
+data/logs/*
 data/failed_searches.csv
+data/search_log.csv
+data/bot_config.json
+data/tags_config.json
+data/group_config.json

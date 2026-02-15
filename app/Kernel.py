@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
 
     log("Preloading LLM engine...")
     container.get_llm()
+    container.get_llm_pro()
     log("LLM engine ready.")
 
     # Initialize messaging jika dalam mode bot

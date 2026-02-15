@@ -18,6 +18,7 @@ from app.services.search_service import SearchService
 from app.services.agent_service import AgentService
 from core.content_parser import ContentParser
 from core.tag_manager import TagManager
+from config.constants import HIGH_RELEVANCE_THRESHOLD, MEDIUM_RELEVANCE_THRESHOLD
 from core.image_handler import ImageHandler
 from core.bot_config import BotConfig
 from config.constants import BOT_TOP_RESULTS
@@ -54,13 +55,16 @@ with col2:
 with col3:
     # Get current global mode
     global_mode = BotConfig.get_search_mode()
-    search_mode = st.radio(
+    mode_labels = ["⚡ Immediate", "🧠 Agent", "🧠💎 Pro"]
+    mode_map = {"⚡ Immediate": "immediate", "🧠 Agent": "agent", "🧠💎 Pro": "agent_pro"}
+    default_idx = 0 if global_mode == "immediate" else (2 if global_mode == "agent_pro" else 1)
+    search_mode_label = st.radio(
         "Search Mode:",
-        ["⚡ Immediate", "🧠 Agent"],
-        index=0 if global_mode == "immediate" else 1,
+        mode_labels,
+        index=default_idx,
         horizontal=True
     )
-    use_agent = "Agent" in search_mode
+    local_search_mode = mode_map[search_mode_label]
 
 # Additional options for group mode
 if chat_mode == "Group":
@@ -87,7 +91,8 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
         with col_a:
             st.metric("Chat Mode", "🏠 Private" if not is_group else "👥 Group")
         with col_b:
-            st.metric("Search Mode", "🧠 Agent" if use_agent else "⚡ Immediate")
+            mode_display = {"immediate": "⚡ Immediate", "agent": "🧠 Agent", "agent_pro": "🧠💎 Pro"}
+            st.metric("Search Mode", mode_display.get(local_search_mode, local_search_mode))
         with col_c:
             if should_reply:
                 st.metric("Decision", "✅ Will Reply")
@@ -105,13 +110,16 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
         st.info(f"🔍 **Query bersih:** `{clean_query}`")
         
         # Step 3: Search (with mode selection)
-        if use_agent:
-            with st.spinner("🧠 Menganalisis dengan LLM..."):
+        if local_search_mode in ("agent", "agent_pro"):
+            use_pro = local_search_mode == "agent_pro"
+            spinner_text = "🧠💎 Analisis mendalam dengan Pro..." if use_pro else "🧠 Menganalisis dengan LLM..."
+            with st.spinner(spinner_text):
                 start_time = time.time()
-                result = AgentService.grade_search(clean_query)
+                result = AgentService.grade_search(clean_query, use_pro=use_pro)
                 elapsed = time.time() - start_time
                 results = [result] if result else []
-            st.success(f"⏱️ Agent mode took {elapsed:.2f}s")
+            label = "Agent Pro" if use_pro else "Agent"
+            st.success(f"⏱️ {label} mode took {elapsed:.2f}s")
         else:
             with st.spinner("⚡ Mencari di database..."):
                 start_time = time.time()
@@ -121,12 +129,12 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
         
         st.markdown("---")
         st.subheader("📥 Bot Response Preview")
-        
+
         if not results:
             st.error("❌ Tidak ditemukan hasil yang relevan")
             st.markdown("""
             Bot akan mengirim pesan:
-            > Maaf, saya tidak menemukan informasi terkait pertanyaan Anda. 
+            > Maaf, saya tidak menemukan informasi terkait pertanyaan Anda.
             > Silakan hubungi Tim IT Support untuk bantuan lebih lanjut.
             """)
         else:
@@ -135,10 +143,10 @@ if st.button("🔍 Test Bot Response", type="primary", use_container_width=True)
             
             # Score badge
             score = best.score
-            if score > 70:
+            if score >= HIGH_RELEVANCE_THRESHOLD:
                 score_badge = f"🌟 {score:.0f}%"
                 score_color = "green"
-            elif score > 50:
+            elif score >= MEDIUM_RELEVANCE_THRESHOLD:
                 score_badge = f"✓ {score:.0f}%"
                 score_color = "orange"
             else:

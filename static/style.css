@@ -1,0 +1,409 @@
+﻿/* === Hospital FAQ Web — Clean Vibrant Theme === */
+
+:root {
+    --bg-primary: #f0f4f8;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fafc;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.15);
+    --border: rgba(0, 0, 0, 0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    --score-high: #16a34a;
+    --score-med: #ca8a04;
+    --score-low: #dc2626;
+    --transition: 0.2s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+}
+
+/* === HEADER === */
+.header-box {
+    text-align: center;
+    padding: 40px 20px 32px;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    border-radius: var(--radius);
+    border: none;
+    box-shadow: 0 4px 20px rgba(249, 115, 22, 0.25);
+}
+
+.header-box h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
+
+.header-box .subtitle {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9rem;
+    margin-top: 6px;
+    font-weight: 400;
+}
+
+/* === SEARCH FORM === */
+.search-form {
+    margin-bottom: 20px;
+}
+
+.search-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    font-family: inherit;
+}
+
+.search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.filter-select {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: inherit;
+    min-width: 140px;
+}
+
+.search-btn {
+    padding: 12px 24px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), transform var(--transition);
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.search-btn:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+}
+
+.reset-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 1.1rem;
+    transition: all var(--transition);
+}
+
+.reset-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--score-low);
+    color: var(--score-low);
+}
+
+/* === RESULT INFO === */
+.result-info {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    padding: 0 4px;
+}
+
+.result-info strong {
+    color: var(--accent);
+}
+
+/* === RESULTS === */
+.results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+details {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+    box-shadow: var(--shadow);
+}
+
+details:hover {
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+details[open] {
+    background: var(--bg-card-hover);
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 2px 12px rgba(59, 130, 246, 0.08);
+}
+
+summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+    list-style: none;
+    gap: 12px;
+    transition: background var(--transition);
+}
+
+summary::-webkit-details-marker {
+    display: none;
+}
+
+summary:hover {
+    background: rgba(59, 130, 246, 0.03);
+}
+
+.summary-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+}
+
+.title-text {
+    font-weight: 500;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* === SCORE BADGES === */
+.score-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.score-high {
+    background: rgba(22, 163, 74, 0.1);
+    color: var(--score-high);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+}
+
+.score-med {
+    background: rgba(202, 138, 4, 0.1);
+    color: var(--score-med);
+    border: 1px solid rgba(202, 138, 4, 0.25);
+}
+
+.score-low {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--score-low);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+/* === FAQ CONTENT === */
+.faq-content {
+    padding: 16px 20px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.faq-content img {
+    max-width: 100%;
+    border-radius: var(--radius-sm);
+    margin: 12px 0;
+    border: 1px solid var(--border);
+}
+
+.faq-content ul, .faq-content ol {
+    padding-left: 20px;
+    margin: 8px 0;
+}
+
+.faq-content li {
+    margin-bottom: 4px;
+}
+
+.faq-content strong, .faq-content b {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.source-box {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: rgba(59, 130, 246, 0.06);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    font-size: 0.85rem;
+}
+
+.source-box a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.source-box a:hover {
+    text-decoration: underline;
+}
+
+/* === EMPTY STATE === */
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-state h3 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+/* === PAGINATION === */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 24px;
+    padding: 16px;
+}
+
+.page-btn {
+    padding: 8px 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all var(--transition);
+}
+
+.page-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+}
+
+.page-btn.disabled {
+    color: var(--text-secondary);
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.page-info {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 600px) {
+    .container {
+        padding: 16px 12px 40px;
+    }
+    
+    .header-box {
+        padding: 28px 16px 24px;
+    }
+    
+    .header-box h1 {
+        font-size: 1.3rem;
+    }
+    
+    .search-row {
+        flex-direction: column;
+    }
+    
+    .search-input, .filter-select, .search-btn {
+        width: 100%;
+    }
+    
+    .reset-btn {
+        width: 100%;
+        height: auto;
+        padding: 10px;
+    }
+    
+    summary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .title-text {
+        white-space: normal;
+    }
+}

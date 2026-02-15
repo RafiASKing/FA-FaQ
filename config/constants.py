@@ -4,14 +4,14 @@ Semua nilai konstan yang sebelumnya hardcoded tersebar di berbagai file.
 """
 
 # === SEARCH & RELEVANCE ===
-RELEVANCE_THRESHOLD = 41          # Minimum score untuk hasil dianggap relevan (%)
-HIGH_RELEVANCE_THRESHOLD = 80     # Score >= ini dianggap sangat relevan (hijau tua)
-MEDIUM_RELEVANCE_THRESHOLD = 50   # Score >= ini dianggap cukup relevan (hijau muda)
+RELEVANCE_THRESHOLD = 70          # Minimum score untuk hasil dianggap relevan (%) — calibrated for Typesense cosine distance
+HIGH_RELEVANCE_THRESHOLD = 85     # Score >= ini dianggap sangat relevan (hijau tua)
+MEDIUM_RELEVANCE_THRESHOLD = 75   # Score >= ini dianggap cukup relevan (hijau muda)
 
 # === RESULT LIMITS ===
 BOT_TOP_RESULTS = 5               # Jumlah hasil untuk WhatsApp Bot
 WEB_TOP_RESULTS = 3               # Jumlah top hasil untuk Web search mode
-SEARCH_CANDIDATE_LIMIT = 50       # Kandidat hasil dari ChromaDB sebelum filtering
+SEARCH_CANDIDATE_LIMIT = 50       # Kandidat hasil dari Typesense sebelum filtering
 
 # === PAGINATION ===
 ITEMS_PER_PAGE = 10               # Jumlah item per halaman
@@ -27,9 +27,9 @@ LLM_MODEL = "gemini-3-flash-preview"             # Model LLM untuk agent mode (d
 LLM_MODEL_PRO = "gemini-3-pro-preview"           # Model LLM untuk high-precision mode
 
 # === AGENT MODE ===
-AGENT_CANDIDATE_LIMIT = 20                       # Top N candidates for LLM grading
-AGENT_MIN_SCORE = 20.0                           # Minimum relevancy % for agent candidates
-AGENT_CONFIDENCE_THRESHOLD = 0.3                 # Minimum confidence to accept grader result
+AGENT_CANDIDATE_LIMIT = 7                        # Top N candidates for LLM grading (full content shown)
+AGENT_MIN_SCORE = 50.0                           # Minimum relevancy % for agent candidates
+AGENT_CONFIDENCE_THRESHOLD = 0.5                 # Minimum confidence to accept grader result (higher than immediate's 70% vector threshold)
 
 # === STREAMLIT COLOR MAPPING ===
 # Mapping HEX code ke nama warna Streamlit

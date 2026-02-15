@@ -35,19 +35,38 @@
 - **API Key**: Set in `.env` as `TYPESENSE_API_KEY`
 - Uses `multi_search` API for large embedding vectors
 
-## LLM / Agent
+## LLM / Agent Mode (V2.4)
 - `LLMPort` has `generate()` (free text) + `generate_structured()` (Pydantic output via `with_structured_output()`)
 - `GeminiChatAdapter` uses `ChatGoogleGenerativeAI` from `langchain-google-genai` (NOT raw `google-genai`)
+- Model: `gemini-3-flash-preview` (default), `gemini-3-pro-preview` (high-precision)
 - Agent service uses `generate_structured(prompt, RerankOutput)` — no manual JSON parsing
 - Agent prompts in `app/services/agent_prompts.py`, schemas in `app/schemas/agent_schema.py`
 - `requirements.txt` has both `google-genai` (embedding) and `langchain-google-genai` (chat/LLM)
+- **Search modes**: "immediate" (vector top-1, 41% threshold) vs "agent" (LLM grading, 30% confidence)
+- **Mode toggle**: `core/bot_config.py` → `data/bot_config.json`, configurable in admin UI
+- **LangSmith tracing**: Automatic via `LANGSMITH_*` env vars
+
+## Embedding (V2.4)
+- **Single source**: `EmbeddingService._build_document_text()`
+- **Method**: `EmbeddingService.build_faq_document()` returns `(embedding, document_text)`
+- **Template fields**: `MODUL`, `TOPIK`, `TERKAIT`, `ISI KONTEN`
+- **Asymmetric retrieval**: Documents use `RETRIEVAL_DOCUMENT` task type, queries use `RETRIEVAL_QUERY`
+- Embedding model: `gemini-embedding-001` (3072-dim)
+
+## Group Module Whitelist (V2.3.1)
+- **Feature**: Per-group module filtering for WhatsApp bot
+- **Storage**: `data/group_config.json`
+- **Service**: `core/group_config.py` — GroupConfig class
+- **Auto-registration**: Groups register on first @faq mention (default: all modules)
+- **Admin UI**: Tab 6 in admin console (`🏢 Group Settings`)
+- **DM behavior**: Always all modules (no filter)
+- **WPPConnect enhancement**: `messaging.get_group_name()` fetches name from API
 
 ## User Preferences
 - No "Future TODO" comments — if it can be done now, do it now
 - Siloam alignment is priority (folder layout, patterns, conventions)
 - Preload everything at startup, no cold-start for first user
-- Documentation for session continuity: `docs/REFACTORING_V2.1_PORTS_ADAPTERS.md`, `docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md`, `docs/REFACTORING_V2.3_TYPESENSE.md`
-- Always use latest model versions (e.g., `gemini-2.5-flash`)
+- Always use latest model versions (e.g., `gemini-3-flash-preview`)
 
 ## Gotchas
 - Streamlit apps import services directly (not via API)
@@ -60,17 +79,9 @@
 - **Windows: WPPConnect can't build** — use partial stack or run bot with Python
 - **Bot Tester** (`streamlit_apps/bot_tester.py`) — test bot logic without WPPConnect
 
-## Group Module Whitelist (V2.3.1)
-- **Feature**: Per-group module filtering for WhatsApp bot
-- **Storage**: `data/group_config.json`
-- **Service**: `core/group_config.py` — GroupConfig class
-- **Auto-registration**: Groups register on first @faq mention (default: all modules)
-- **Admin UI**: Tab 6 in admin console (`🏢 Group Settings`)
-- **DM behavior**: Always all modules (no filter)
-- **WPPConnect enhancement**: `messaging.get_group_name()` fetches name from API
-
-## Embedding Template (V2.3.1)
-- **Single source**: `EmbeddingService._build_document_text()`
-- **Method**: `EmbeddingService.build_faq_document()` returns `(embedding, document_text)`
-- **Template fields**: `MODUL`, `TOPIK`, `TERKAIT`, `ISI KONTEN`
+## Documentation Index
+- **`docs/SYSTEM_OVERVIEW.md`** — Complete current-state overview (START HERE)
+- **`docs/MEMORY.md`** — This file, quick reference for AI agents
+- **`docs/REFACTORING_V2.1-V2.4`** — Historical changelogs per version
+- **`docs/COMPLETE_SYSTEM_SPECIFICATION*.md`** — ⚠️ OUTDATED (still references ChromaDB)
 

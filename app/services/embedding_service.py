@@ -53,7 +53,7 @@ class EmbeddingService:
         # Dapatkan deskripsi tag
         try:
             tag_desc = TagManager.get_tag_description(tag)
-        except:
+        except Exception:
             tag_desc = ""
 
         # Buat domain string

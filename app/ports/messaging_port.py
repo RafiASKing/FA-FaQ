@@ -75,3 +75,29 @@ class MessagingPort(ABC):
             Number of images successfully sent.
         """
         ...
+
+    @abstractmethod
+    def get_chat_info(self, chat_id: str) -> Optional[dict]:
+        """
+        Get chat info (including group name) from the messaging provider.
+
+        Args:
+            chat_id: Chat/Group ID.
+
+        Returns:
+            Dict with chat info or None if failed.
+        """
+        ...
+
+    @abstractmethod
+    def get_group_name(self, group_id: str) -> Optional[str]:
+        """
+        Get group name from the messaging provider.
+
+        Args:
+            group_id: Group ID.
+
+        Returns:
+            Group name/subject, or None if not found.
+        """
+        ...

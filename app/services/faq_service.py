@@ -1,6 +1,6 @@
 """
 FAQ Service - Mengelola CRUD operasi untuk FAQ.
-Uses VectorStorePort via container (no direct ChromaDB dependency).
+Uses VectorStorePort via container (no direct database dependency).
 """
 
 import pandas as pd
@@ -8,6 +8,7 @@ from typing import Dict, Optional, List, Any
 
 from config import container
 from core.image_handler import ImageHandler
+from core.logger import log
 from .embedding_service import EmbeddingService
 
 
@@ -127,7 +128,7 @@ class FaqService:
             return store.delete(str(doc_id))
 
         except Exception as e:
-            print(f"Error deleting FAQ {doc_id}: {e}")
+            log(f"Error deleting FAQ {doc_id}: {e}")
             return False
 
     @classmethod

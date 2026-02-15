@@ -30,8 +30,7 @@ class VectorStorePort(ABC):
     Port for vector database operations.
 
     Implementations:
-    - ChromaDBVectorStoreAdapter (ChromaDB)
-    - Future: Typesense, Pinecone, Qdrant, Weaviate, etc.
+    - TypesenseVectorStoreAdapter (config/typesenseDb.py)
     """
 
     @abstractmethod

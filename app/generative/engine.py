@@ -43,11 +43,15 @@ class GeminiEmbeddingAdapter(EmbeddingPort):
             response = self._client.models.embed_content(
                 model=self._model,
                 contents=text,
-                config=types.EmbedContentConfig(task_type=task_type),
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    http_options=types.HttpOptions(timeout=25_000),
+                ),
             )
             return response.embeddings[0].values
         except Exception as e:
-            print(f"Embedding error: {e}")
+            from core.logger import log
+            log(f"Embedding error: {e}")
             return []
 
 
@@ -58,15 +62,16 @@ class GeminiChatAdapter(LLMPort):
 
     Args:
         api_key: Google API key.
-        model: Chat model name (e.g. "gemini-3.0-flash").
+        model: Chat model name (e.g. "gemini-3-flash-preview").
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", timeout: int = 30):
         from langchain_google_genai import ChatGoogleGenerativeAI
         self._llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=0.0,
+            timeout=timeout,
         )
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
@@ -80,7 +85,8 @@ class GeminiChatAdapter(LLMPort):
             response = self._llm.invoke(messages)
             return response.content
         except Exception as e:
-            print(f"LLM generation error: {e}")
+            from core.logger import log
+            log(f"LLM generation error: {e}")
             return ""
 
     def generate_structured(self, prompt: str, schema: Type[T], system_prompt: str = "") -> T:

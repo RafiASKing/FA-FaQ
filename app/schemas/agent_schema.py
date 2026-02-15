@@ -5,7 +5,7 @@ Following Siloam pattern: schemas serve double duty (LLM output + API response).
 These schemas are used with LangChain's `llm.with_structured_output(Schema)`
 so the LLM returns validated Pydantic objects directly — no manual JSON parsing.
 
-Requires: pip install langchain-google-genai langgraph
+Requires: pip install langchain-google-genai
 """
 
 from pydantic import BaseModel, Field
@@ -37,15 +37,4 @@ class RerankOutput(BaseModel):
         description="Tingkat keyakinan pemilihan (0-1). 0.0-0.3=low, 0.4-0.6=medium, 0.7-1.0=high"
     )
 
-
-# === Future: add more structured output schemas here ===
-# Example for multi-step agent:
-#
-# class IntentClassification(BaseModel):
-#     intent: Literal['faq_search', 'general'] = Field(...)
-#     reasoning: str = Field(default="")
-#
-# class QueryRefinement(BaseModel):
-#     refined_query: str = Field(...)
-#     filter_tag: Optional[str] = Field(default=None)
 

@@ -14,6 +14,7 @@ from PIL import Image
 
 from config.settings import paths
 from config.constants import IMAGE_MAX_WIDTH, IMAGE_QUALITY
+from core.logger import log
 
 
 class ImageHandler:
@@ -98,7 +99,7 @@ class ImageHandler:
                 image.save(str(full_path), "JPEG", quality=IMAGE_QUALITY, optimize=True)
                 
             except Exception as e:
-                print(f"⚠️ Gagal compress gambar {getattr(file, 'name', 'unknown')}: {e}")
+                log(f"Gagal compress gambar {getattr(file, 'name', 'unknown')}: {e}")
                 # Fallback: simpan raw
                 if hasattr(file, "seek"):
                     file.seek(0)
@@ -187,9 +188,9 @@ class ImageHandler:
                 try:
                     os.remove(clean_path)
                     deleted.append(clean_path)
-                    print(f"🗑️ File Deleted: {clean_path}")
+                    log(f"File Deleted: {clean_path}")
                 except Exception as e:
-                    print(f"⚠️ Gagal hapus file {clean_path}: {e}")
+                    log(f"Gagal hapus file {clean_path}: {e}")
         
         return deleted
     

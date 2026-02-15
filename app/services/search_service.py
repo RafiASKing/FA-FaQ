@@ -1,6 +1,6 @@
 """
 Search Service - Mengelola logika pencarian semantic.
-Uses VectorStorePort via container (no direct ChromaDB dependency).
+Uses VectorStorePort via container (no direct database dependency).
 """
 
 from typing import List, Dict, Optional, Any
@@ -52,16 +52,16 @@ class SearchService:
     @staticmethod
     def calculate_relevance(distance: float) -> float:
         """
-        Hitung score relevance dari Euclidean distance.
+        Hitung score relevance dari cosine distance (Typesense).
 
-        Distance semakin kecil = semakin mirip.
-        Kita konversi ke persentase (semakin besar = semakin relevan).
+        Cosine distance: 0 = identical, 2 = opposite.
+        Kita konversi ke persentase: score = (1 - distance) * 100.
 
         Args:
-            distance: L2 Euclidean distance
+            distance: Cosine distance from Typesense (0-2 range)
 
         Returns:
-            Score 0-100 (persentase relevance)
+            Score 0-100 (persentase relevance, = cosine similarity * 100)
         """
         return max(0, (1 - distance) * 100)
 
@@ -191,12 +191,15 @@ class SearchService:
         Returns:
             Top 1 SearchResult that matches allowed modules
         """
-        results = cls.search(query, filter_tag, n_results=top_n)
-        
+        # Fetch full candidate pool, THEN filter by modules, THEN take top 1.
+        # Using SEARCH_CANDIDATE_LIMIT (not top_n) so module filtering
+        # doesn't starve results when top candidates are from disallowed modules.
+        results = cls.search(query, filter_tag)
+
         # Apply module whitelist filter
         if allowed_modules and "all" not in allowed_modules:
             results = [r for r in results if r.tag in allowed_modules]
-        
+
         return results[:1]  # Bot hanya return 1 hasil terbaik
 
     @classmethod
@@ -224,7 +227,7 @@ class SearchService:
 
             try:
                 id_num = int(doc.id)
-            except:
+            except (ValueError, TypeError):
                 id_num = 0
 
             tag = meta.get('tag', 'Umum')

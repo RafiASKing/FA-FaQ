@@ -10,6 +10,7 @@ from typesense.exceptions import ObjectNotFound
 
 from app.ports.vector_store_port import VectorStorePort, VectorSearchResult, VectorDocument
 from config.constants import EMBEDDING_DIMENSION
+from core.logger import log
 
 
 class TypesenseVectorStoreAdapter(VectorStorePort):
@@ -21,7 +22,7 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
         port: Typesense server port.
         api_key: Typesense API key.
         collection_name: Name of the collection.
-        embedding_dim: Dimension of embedding vectors (default: 768 for Gemini).
+        embedding_dim: Dimension of embedding vectors (default: 3072 for gemini-embedding-001).
     """
 
     # Schema for FAQ collection
@@ -120,14 +121,14 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
             search_result = response.get("results", [{}])[0]
             
         except Exception as e:
-            print(f"Typesense search error: {e}")
+            log(f"Typesense search error: {e}")
             return []
         
         results = []
         for hit in search_result.get("hits", []):
             doc = hit.get("document", {})
             # Typesense returns vector_distance (lower is better)
-            # Convert to distance format similar to ChromaDB
+            # Convert cosine distance to relevancy percentage
             distance = hit.get("vector_distance", 1.0)
             
             results.append(VectorSearchResult(
@@ -146,43 +147,65 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
         
         return results
 
+    def _parse_hits_to_documents(
+        self, hits: list, include_documents: bool = False
+    ) -> List[VectorDocument]:
+        """Parse Typesense hits into VectorDocument list."""
+        docs = []
+        for hit in hits:
+            doc = hit.get("document", {})
+            docs.append(VectorDocument(
+                id=doc.get("id", ""),
+                metadata={
+                    "tag": doc.get("tag", ""),
+                    "judul": doc.get("judul", ""),
+                    "jawaban_tampil": doc.get("jawaban_tampil", ""),
+                    "keywords_raw": doc.get("keywords_raw", ""),
+                    "path_gambar": doc.get("path_gambar", ""),
+                    "sumber_url": doc.get("sumber_url", ""),
+                },
+                document=doc.get("document", "") if include_documents else "",
+            ))
+        return docs
+
     def get_all(self, include_documents: bool = False) -> List[VectorDocument]:
-        """Retrieve all documents from the collection."""
+        """Retrieve all documents from the collection (paginated)."""
         try:
-            # Use export for getting all documents
             exclude_fields = ["embedding"]
             if not include_documents:
                 exclude_fields.append("document")
-            
-            # Search with wildcard to get all
-            search_params = {
-                "q": "*",
-                "per_page": 250,  # Typesense max per page
-                "exclude_fields": ",".join(exclude_fields),
-            }
-            
-            response = self._client.collections[self._collection_name].documents.search(search_params)
-            
-            docs = []
-            for hit in response.get("hits", []):
-                doc = hit.get("document", {})
-                docs.append(VectorDocument(
-                    id=doc.get("id", ""),
-                    metadata={
-                        "tag": doc.get("tag", ""),
-                        "judul": doc.get("judul", ""),
-                        "jawaban_tampil": doc.get("jawaban_tampil", ""),
-                        "keywords_raw": doc.get("keywords_raw", ""),
-                        "path_gambar": doc.get("path_gambar", ""),
-                        "sumber_url": doc.get("sumber_url", ""),
-                    },
-                    document=doc.get("document", "") if include_documents else "",
-                ))
-            
-            return docs
-            
+
+            all_docs = []
+            page = 1
+            per_page = 250  # Typesense max per page
+
+            while True:
+                search_params = {
+                    "q": "*",
+                    "per_page": per_page,
+                    "page": page,
+                    "exclude_fields": ",".join(exclude_fields),
+                }
+
+                response = self._client.collections[self._collection_name].documents.search(search_params)
+                hits = response.get("hits", [])
+
+                if not hits:
+                    break
+
+                all_docs.extend(self._parse_hits_to_documents(hits, include_documents))
+
+                # Stop if we've fetched all documents
+                found = response.get("found", 0)
+                if len(all_docs) >= found:
+                    break
+
+                page += 1
+
+            return all_docs
+
         except Exception as e:
-            print(f"Typesense get_all error: {e}")
+            log(f"Typesense get_all error: {e}")
             return []
 
     def get_by_id(
@@ -209,7 +232,7 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
         except ObjectNotFound:
             return None
         except Exception as e:
-            print(f"Typesense get_by_id error: {e}")
+            log(f"Typesense get_by_id error: {e}")
             return None
 
     def upsert(
@@ -236,7 +259,7 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
             # Try update first, then create
             self._client.collections[self._collection_name].documents.upsert(doc)
         except Exception as e:
-            print(f"Typesense upsert error: {e}")
+            log(f"Typesense upsert error: {e}")
             raise
 
     def delete(self, doc_id: str) -> bool:
@@ -247,22 +270,40 @@ class TypesenseVectorStoreAdapter(VectorStorePort):
         except ObjectNotFound:
             return False
         except Exception as e:
-            print(f"Typesense delete error: {e}")
+            log(f"Typesense delete error: {e}")
             return False
 
     def get_all_ids(self) -> List[str]:
-        """Get all document IDs (lightweight, no metadata)."""
+        """Get all document IDs (lightweight, paginated, no metadata)."""
         try:
-            search_params = {
-                "q": "*",
-                "per_page": 250,
-                "include_fields": "id",
-            }
-            
-            response = self._client.collections[self._collection_name].documents.search(search_params)
-            
-            return [hit["document"]["id"] for hit in response.get("hits", [])]
-            
+            all_ids = []
+            page = 1
+            per_page = 250
+
+            while True:
+                search_params = {
+                    "q": "*",
+                    "per_page": per_page,
+                    "page": page,
+                    "include_fields": "id",
+                }
+
+                response = self._client.collections[self._collection_name].documents.search(search_params)
+                hits = response.get("hits", [])
+
+                if not hits:
+                    break
+
+                all_ids.extend(hit["document"]["id"] for hit in hits)
+
+                found = response.get("found", 0)
+                if len(all_ids) >= found:
+                    break
+
+                page += 1
+
+            return all_ids
+
         except Exception as e:
-            print(f"Typesense get_all_ids error: {e}")
+            log(f"Typesense get_all_ids error: {e}")
             return []

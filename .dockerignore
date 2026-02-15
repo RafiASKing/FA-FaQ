@@ -1,12 +1,11 @@
-# --- DATABASE & VOLUMES (Wajib Ignore Wildcard) ---
+# --- RUNTIME DATA (logs, config, analytics) ---
+data/
 postgres_data*
 evolution_store*
 evolution_instances*
 waha_data*
-data/chroma_data
 
-# --- WPPCONNECT SESSION (BARU - WAJIB DITAMBAH) ---
-# Supaya sesi WA tidak ikut tercopy ke dalam image saat build
+# --- WPPCONNECT SESSION ---
 wpp_tokens
 wpp_sessions
 wpp_userData
@@ -18,7 +17,13 @@ __pycache__
 *.pyc
 .DS_Store
 .env
+.env.*
 
-# --- PYTHON VENV (Jaga-jaga kalau ada di local) ---
+# --- PYTHON VENV ---
 venv
 env
+
+# --- DOCS & SCRIPTS (not needed in image) ---
+docs/
+scripts/
+*.md

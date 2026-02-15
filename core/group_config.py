@@ -6,6 +6,8 @@ Groups are auto-registered on first @faq mention with default "all" modules.
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -34,10 +36,19 @@ class GroupConfig:
     
     @classmethod
     def _save(cls, config: Dict[str, Any]) -> None:
-        """Save config to JSON file."""
+        """Save config to JSON file (atomic write — safe from corruption)."""
         cls.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(cls.CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=cls.CONFIG_PATH.parent, suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, cls.CONFIG_PATH)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
     
     @classmethod
     def get_config(cls, group_id: str) -> Optional[Dict[str, Any]]:

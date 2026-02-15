@@ -7,10 +7,11 @@ instead of relying purely on vector distance.
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, Request, HTTPException
 
 from app.schemas import SearchResponse, SearchResultItem
 from app.services.agent_service import AgentService
+from config.middleware import limiter
 from core.logger import log
 
 
@@ -33,13 +34,13 @@ class AgentController:
         filter_tag: Optional[str] = None,
         top_n: int = 3,
     ) -> SearchResponse:
-        """Agent-mode search: LLM reranks candidate FAQs."""
+        """Agent-mode search: LLM grades candidate FAQs."""
         try:
-            results = self.agent_service.rerank_search(
+            result = self.agent_service.grade_search(
                 query=query,
-                filter_tag=filter_tag,
-                top_n=top_n,
+                allowed_modules=[filter_tag] if filter_tag else None,
             )
+            results = [result] if result else []
 
             return SearchResponse(
                 query=query,
@@ -71,8 +72,10 @@ agentController = AgentController()
 # === Routes (wired to singleton) ===
 
 @router.get("", response_model=SearchResponse)
+@limiter.limit("20/minute")
 async def agent_search(
-    q: str = Query(..., description="Query pencarian", min_length=1),
+    request: Request,
+    q: str = Query(..., description="Query pencarian", min_length=1, max_length=1000),
     tag: Optional[str] = Query(default=None, description="Filter tag"),
     limit: int = Query(default=3, ge=1, le=10, description="Max results (1-10)"),
 ) -> SearchResponse:

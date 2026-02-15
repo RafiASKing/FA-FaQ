@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class SearchRequest(BaseModel):
     """Schema untuk search request."""
-    query: str = Field(..., description="Query pencarian", min_length=1)
+    query: str = Field(..., description="Query pencarian", min_length=1, max_length=1000)
     filter_tag: Optional[str] = Field(default=None, description="Filter berdasarkan tag")
     limit: int = Field(default=3, description="Jumlah hasil maksimal", ge=1, le=50)
     

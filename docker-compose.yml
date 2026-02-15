@@ -109,8 +109,9 @@ services:
       - typesense
     volumes:
       - ./data:/app/data
-      - ./web_v2:/app/web_v2
       - ./images:/app/images
+      - ./templates:/app/templates
+      - ./static:/app/static
     env_file: .env
     environment:
       - VECTOR_DB=typesense

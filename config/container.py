@@ -19,6 +19,7 @@ _embedding: Optional[EmbeddingPort] = None
 _vector_store: Optional[VectorStorePort] = None
 _messaging: Optional[MessagingPort] = None
 _llm: Optional[LLMPort] = None
+_llm_pro: Optional[LLMPort] = None
 
 
 # === Getters ===
@@ -102,6 +103,25 @@ def get_llm() -> LLMPort:
     return _llm
 
 
+def get_llm_pro() -> LLMPort:
+    """
+    Get the Pro LLM adapter for deeper analysis.
+    Currently: Google Gemini Pro (slower, more accurate).
+    """
+    global _llm_pro
+    if _llm_pro is None:
+        from config.settings import settings
+        from config.constants import LLM_MODEL_PRO
+        from app.generative.engine import GeminiChatAdapter
+
+        _llm_pro = GeminiChatAdapter(
+            api_key=settings.google_api_key,
+            model=LLM_MODEL_PRO,
+            timeout=60,
+        )
+    return _llm_pro
+
+
 # === Overrides (for testing) ===
 
 def set_embedding(adapter: EmbeddingPort):
@@ -130,8 +150,9 @@ def set_llm(adapter: LLMPort):
 
 def reset_all():
     """Reset all singletons. Useful for testing."""
-    global _embedding, _vector_store, _messaging, _llm
+    global _embedding, _vector_store, _messaging, _llm, _llm_pro
     _embedding = None
     _vector_store = None
     _messaging = None
     _llm = None
+    _llm_pro = None

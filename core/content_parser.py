@@ -155,7 +155,7 @@ class ContentParser:
                     </div>
                     '''
                 return ""
-            except:
+            except Exception:
                 return ""
         
         html_content = cls.IMAGE_TAG_PATTERN.sub(replace_match, html_content)
@@ -191,7 +191,7 @@ class ContentParser:
                     images_to_send.append(img_list[idx])
                     return f"*(Lihat Gambar {idx+1})*"
                 return ""
-            except:
+            except Exception:
                 return ""
         
         processed_text = cls.IMAGE_TAG_PATTERN.sub(replace_tag, text)

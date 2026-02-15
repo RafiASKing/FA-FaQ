@@ -1,4 +1,4 @@
 {
-    "search_mode": "immediate",
-    "agent_confidence_threshold": 0.3
+  "search_mode": "agent",
+  "agent_confidence_threshold": 0.5
 }
