@@ -568,15 +568,15 @@ with tab6:
         for group_id, config in sorted_groups:
             with st.container(border=True):
                 col_name, col_modules = st.columns([2, 3])
-                
+
                 with col_name:
                     st.markdown(f"**{config.get('name', 'Unknown Group')}**")
                     st.caption(f"`{group_id[:30]}...`")
                     st.caption(f"📅 First seen: {config.get('first_seen', 'N/A')[:10]}")
-                
+
                 with col_modules:
                     current_modules = config.get('allowed_modules', ['all'])
-                    
+
                     # Multiselect for allowed modules
                     new_modules = st.multiselect(
                         "Allowed Modules",
@@ -585,7 +585,7 @@ with tab6:
                         key=f"modules_{group_id}",
                         label_visibility="collapsed"
                     )
-                    
+
                     # Save button
                     if st.button("💾 Save", key=f"save_{group_id}", use_container_width=True):
                         if not new_modules:
@@ -668,8 +668,9 @@ with tab6:
             - Better accuracy for complex questions
             - Fast (~2-4s)
             """)
-            
-            # Confidence threshold slider
+
+        # Confidence threshold slider (for both agent modes)
+        if current_mode in ("agent", "agent_pro"):
             threshold = BotConfig.get_confidence_threshold()
             new_threshold = st.slider(
                 "Confidence Threshold",
@@ -679,7 +680,7 @@ with tab6:
                 step=0.1,
                 help="Minimum confidence for LLM to accept a match"
             )
-            
+
             if new_threshold != threshold:
                 if st.button("💾 Save Threshold", key="save_threshold"):
                     BotConfig.set_confidence_threshold(new_threshold)

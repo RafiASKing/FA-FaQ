@@ -94,21 +94,24 @@ class GroupConfig:
     @classmethod
     def register_group(cls, group_id: str, name: str) -> None:
         """
-        Register a new group with default "all" modules.
-        Called automatically on first @faq mention.
-        
+        Register or sync a group.
+        Called on every @faq mention — creates new entry or updates name if changed.
+
         Args:
             group_id: WhatsApp group JID
-            name: Group display name
+            name: Group display name (from WPPConnect API)
         """
         config = cls._load()
-        
+
         if group_id not in config["groups"]:
             config["groups"][group_id] = {
                 "name": name,
                 "allowed_modules": ["all"],
                 "first_seen": datetime.now().isoformat()
             }
+            cls._save(config)
+        elif name and config["groups"][group_id].get("name") != name:
+            config["groups"][group_id]["name"] = name
             cls._save(config)
     
     @classmethod

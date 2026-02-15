@@ -88,14 +88,12 @@ class WebhookController:
             )
             return
         
-        # Send acknowledgment immediately (reduces perceived latency)
+        # Send acknowledgment for agent modes (immediate is fast enough, no need)
         search_mode = BotConfig.get_search_mode()
         if search_mode == "agent_pro":
-            WhatsAppService.send_text(remote_jid, "🧠💎 Menganalisis mendalam...")
+            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu...")
         elif search_mode == "agent":
-            WhatsAppService.send_text(remote_jid, "🧠 Menganalisis pertanyaan...")
-        else:
-            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu,...")
+            WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu..")
         
         log(f"🔍 Mencari: '{clean_query}' (mode: {search_mode})")
         

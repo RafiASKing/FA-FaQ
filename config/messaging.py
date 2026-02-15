@@ -151,35 +151,45 @@ class WPPConnectMessagingAdapter(MessagingPort):
     def get_chat_info(self, chat_id: str) -> Optional[dict]:
         """
         Get chat info (including group name) from WPPConnect.
-        
+
+        Tries multiple endpoints for compatibility across WPPConnect versions:
+        1. /api/{session}/contact/{chatId}  (v2.8+)
+        2. /api/{session}/chat/{chatId}     (older versions)
+
         Args:
             chat_id: Chat/Group JID (e.g., "xxx@g.us")
-            
+
         Returns:
             Dict with chat info or None if failed.
             For groups, typically contains 'name' or 'subject'.
         """
         if not chat_id:
             return None
-        
-        url = f"{self._base_url}/api/{self._session_name}/chat/{chat_id}"
-        
-        try:
-            r = requests.get(url, headers=self._get_headers(), timeout=10)
-            
-            if r.status_code == 401:
-                self._generate_token()
+
+        endpoints = [
+            f"{self._base_url}/api/{self._session_name}/contact/{chat_id}",
+            f"{self._base_url}/api/{self._session_name}/chat/{chat_id}",
+        ]
+
+        for url in endpoints:
+            try:
                 r = requests.get(url, headers=self._get_headers(), timeout=10)
-            
-            if r.status_code in [200, 201]:
-                return r.json()
-            else:
-                log(f"Get chat info failed: {r.status_code}")
-                return None
-                
-        except Exception as e:
-            log(f"Error get chat info: {e}")
-            return None
+
+                if r.status_code == 401:
+                    self._generate_token()
+                    r = requests.get(url, headers=self._get_headers(), timeout=10)
+
+                if r.status_code in [200, 201]:
+                    data = r.json()
+                    # WPPConnect may wrap response in 'response' key
+                    if isinstance(data, dict) and "response" in data:
+                        return data["response"]
+                    return data
+            except Exception as e:
+                log(f"Error get chat info ({url}): {e}")
+
+        log(f"Get chat info failed for {chat_id}: all endpoints returned error")
+        return None
 
     def get_group_name(self, group_id: str) -> Optional[str]:
         """
@@ -198,12 +208,14 @@ class WPPConnectMessagingAdapter(MessagingPort):
         if not chat_info:
             return None
         
-        # Try various field names WPPConnect might use
+        # Try various field names across WPPConnect versions
         return (
             chat_info.get("name") or
             chat_info.get("subject") or
             chat_info.get("formattedTitle") or
+            chat_info.get("pushname") or
             chat_info.get("contact", {}).get("name") or
+            chat_info.get("groupMetadata", {}).get("subject") or
             None
         )
 
