@@ -26,7 +26,7 @@ services:
     ports:
       - "21465:21465"
     environment:
-      SECRET_KEY: admin123
+      SECRET_KEY: ${WA_SESSION_KEY:-THISISMYSECURETOKEN}
       LOG_LEVEL: info
     volumes:
       # Token & Sesi
@@ -52,7 +52,7 @@ services:
       - TYPESENSE_PORT=8108
       - TYPESENSE_API_KEY=xyz
       - WA_BASE_URL=http://wppconnect:21465
-      - WA_SESSION_KEY=THISISMYSECURETOKEN
+      - WA_SESSION_KEY=${WA_SESSION_KEY:-THISISMYSECURETOKEN}
       - PYTHONUNBUFFERED=1
     volumes:
       - ./data:/app/data
