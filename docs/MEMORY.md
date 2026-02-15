@@ -1,87 +1,79 @@
-# Project Memory - Hospital FAQ Retriever (FA-FaQ)
+# Project Memory - Hospital FAQ Retriever (FA-FaQ) v3.0
+
+> Quick reference for AI coding agents. For full details see `docs/SYSTEM_OVERVIEW.md`.
 
 ## Architecture (Siloam-aligned Ports & Adapters)
-- **Pattern**: Ports & Adapters (Hexagonal Architecture), folder layout aligned to Siloam AI Research Template
-- **Ports** (ABCs): `app/ports/embedding_port.py`, `app/ports/vector_store_port.py`, `app/ports/messaging_port.py`, `app/ports/llm_port.py`
+- **Pattern**: Ports & Adapters (Hexagonal), Siloam AI Research Template
+- **Ports** (ABCs): `app/ports/embedding_port.py`, `vector_store_port.py`, `messaging_port.py`, `llm_port.py`
 - **Adapters**:
-  - `app/generative/engine.py` — GeminiEmbeddingAdapter (google-genai) + GeminiChatAdapter (langchain-google-genai ChatGoogleGenerativeAI)
-  - `config/typesenseDb.py` — TypesenseVectorStoreAdapter (Siloam convention: `config/*Db.py`)
-  - `config/messaging.py` — WPPConnectMessagingAdapter (external service in `config/`)
-- **Container**: `config/container.py` — lazy singleton factory, `get_embedding()`, `get_vector_store()`, `get_messaging()`, `get_llm()` + `set_*()` for testing
-- **Services** use `from config import container` then `container.get_*()` — no direct dependency on concrete implementations
-- `WhatsAppService` is a thin facade delegating to `container.get_messaging()` + `BotLogicService`
-- Routing uses `config/routes.py` `setup_routes(app)` + `routes/api/v1.py` aggregator
-- Middleware uses `config/middleware.py` `setup_middleware(app)`
-- All shared resources preloaded at startup in lifespan (no lazy cold-start for first user)
+  - `app/generative/engine.py` — GeminiEmbeddingAdapter (google-genai) + GeminiChatAdapter (langchain-google-genai)
+  - `config/typesenseDb.py` — TypesenseVectorStoreAdapter
+  - `config/messaging.py` — WPPConnectMessagingAdapter (cached all-chats for group names, 5-min TTL)
+- **Container**: `config/container.py` — `get_embedding()`, `get_vector_store()`, `get_messaging()`, `get_llm()`, `get_llm_pro()` + `set_*()` for tests
+- Services use `from config import container` then `container.get_*()` — no direct dependency on concrete impls
+- Routing: `config/routes.py` → `routes/api/v1.py` aggregator
+- All shared resources preloaded at startup in lifespan (no cold-start)
 
 ## Key Files
-- `config/container.py` — swap adapters here to change providers
-- `config/typesenseDb.py` — Typesense vector store adapter
-- `config/routes.py` — centralized route registration (Siloam pattern)
-- `config/middleware.py` — middleware setup (Siloam pattern)
-- `app/Kernel.py` — app factory, lifespan manager (preloads all shared resources)
-- `app/services/` — business logic (embedding HyDE, search, FAQ CRUD, bot logic, agent reranking)
-- `app/ports/` — abstract interfaces (EmbeddingPort, VectorStorePort, MessagingPort, LLMPort)
-- `app/generative/engine.py` — AI/ML engine adapters (embedding + chat)
-- `app/controllers/agent_controller.py` — Siloam-pattern singleton controller for agent mode
-- `config/settings.py` — env vars via Pydantic BaseSettings
-- `config/constants.py` — magic numbers (thresholds, limits, model names)
+- `config/container.py` — swap adapters to change providers
+- `config/settings.py` — Pydantic BaseSettings (.env)
+- `config/constants.py` — thresholds, model names, limits
+- `app/Kernel.py` — FastAPI factory, lifespan (preloads ALL resources incl LLM Pro)
+- `app/services/agent_service.py` — LLM grading (7 candidates, full content, tag descriptions)
+- `app/services/agent_prompts.py` — Hospital EMR context prompt, Indonesian labels
+- `core/bot_config.py` — runtime config (atomic writes via tempfile + os.replace)
+- `core/group_config.py` — per-group module whitelist (atomic writes, auto-sync names)
+- `core/logger.py` — 10-column failed search CSV + search log CSV
 
-## Vector Database: Typesense (V2.3+)
-- **Why**: Production-grade, no SQLite locks, Siloam standard
-- **Collection**: `hospital_faq_kb`
-- **Embedding dim**: 3072 (gemini-embedding-001)
-- **Port**: 8118 (external) / 8108 (Docker internal)
-- **API Key**: Set in `.env` as `TYPESENSE_API_KEY`
-- Uses `multi_search` API for large embedding vectors
+## Search Modes
+- **Immediate**: vector top-1, 70% threshold, no waiting msg
+- **Agent Flash** (`gemini-3-flash-preview`): LLM grades top 7, "Baik, mohon ditunggu", 30s timeout
+- **Agent Pro** (`gemini-3-pro-preview`): LLM grades top 7, "Baik, mohon ditunggu...", 60s timeout
+- Confidence threshold configurable for both agent modes (default 0.5)
+- `AGENT_CANDIDATE_LIMIT=7`, `AGENT_MIN_SCORE=50.0`, `RELEVANCE_THRESHOLD=70`
 
-## LLM / Agent Mode (V2.4)
-- `LLMPort` has `generate()` (free text) + `generate_structured()` (Pydantic output via `with_structured_output()`)
-- `GeminiChatAdapter` uses `ChatGoogleGenerativeAI` from `langchain-google-genai` (NOT raw `google-genai`)
-- Model: `gemini-3-flash-preview` (default), `gemini-3-pro-preview` (high-precision)
-- Agent service uses `generate_structured(prompt, RerankOutput)` — no manual JSON parsing
-- Agent prompts in `app/services/agent_prompts.py`, schemas in `app/schemas/agent_schema.py`
-- `requirements.txt` has both `google-genai` (embedding) and `langchain-google-genai` (chat/LLM)
-- **Search modes**: "immediate" (vector top-1, 41% threshold) vs "agent" (LLM grading, 30% confidence)
-- **Mode toggle**: `core/bot_config.py` → `data/bot_config.json`, configurable in admin UI
-- **LangSmith tracing**: Automatic via `LANGSMITH_*` env vars
+## LLM / Agent
+- `LLMPort` has `generate()` + `generate_structured()` (Pydantic via `with_structured_output()`)
+- Agent prompt: tag descriptions (TagManager), HyDE keywords, full content, [GAMBAR X] tags kept
+- `RerankOutput`: reasoning (str), best_id (str, "0" = no match), confidence (float)
+- Both `google-genai` (embedding) and `langchain-google-genai` (chat/LLM) in requirements.txt
 
-## Embedding (V2.4)
-- **Single source**: `EmbeddingService._build_document_text()`
-- **Method**: `EmbeddingService.build_faq_document()` returns `(embedding, document_text)`
-- **Template fields**: `MODUL`, `TOPIK`, `TERKAIT`, `ISI KONTEN`
-- **Asymmetric retrieval**: Documents use `RETRIEVAL_DOCUMENT` task type, queries use `RETRIEVAL_QUERY`
-- Embedding model: `gemini-embedding-001` (3072-dim)
+## Vector DB: Typesense
+- Collection: `hospital_faq_kb`, 3072-dim (gemini-embedding-001), cosine distance
+- Port: 8108 inside Docker, 8118 from host
+- `get_all()`/`get_all_ids()` use pagination (250/page), `query()` uses `multi_search` API
 
-## Group Module Whitelist (V2.3.1)
-- **Feature**: Per-group module filtering for WhatsApp bot
-- **Storage**: `data/group_config.json`
-- **Service**: `core/group_config.py` — GroupConfig class
-- **Auto-registration**: Groups register on first @faq mention (default: all modules)
-- **Admin UI**: Tab 6 in admin console (`🏢 Group Settings`)
-- **DM behavior**: Always all modules (no filter)
-- **WPPConnect enhancement**: `messaging.get_group_name()` fetches name from API
+## Deployment (Production)
+- AWS Lightsail, Ubuntu 22.04, `faq-assist.cloud`, Nginx + Certbot SSL
+- Docker Compose v1 (`docker-compose` command, not `docker compose`)
+- 6 containers: typesense, wppconnect, faq-bot, faq-user, faq-admin, faq-web-v2
+- `docker-compose restart` does NOT re-read .env — must use `docker-compose up -d`
+- WPPConnect v2.8.11: SECRET_KEY synced via `${WA_SESSION_KEY}` in docker-compose.yml
+- Webhook URL in `wpp_sessions/config.json` → `http://faq-bot:8000/webhook/whatsapp`
+
+## Safety
+- Atomic writes for bot_config.json, group_config.json
+- TagManager: mtime-based cache (no disk I/O per query)
+- bcrypt auth with plain-text fallback for dev
+- Non-root Docker user `fafaq`
+- Typed exceptions everywhere (no bare `except:`)
 
 ## User Preferences
-- No "Future TODO" comments — if it can be done now, do it now
-- Siloam alignment is priority (folder layout, patterns, conventions)
-- Preload everything at startup, no cold-start for first user
-- Always use latest model versions (e.g., `gemini-3-flash-preview`)
+- No "Future TODO" comments
+- Siloam alignment is priority
+- Preload everything at startup
+- Always use latest model versions
+- Class name is `FaqService` (not `FAQService`)
 
 ## Gotchas
 - Streamlit apps import services directly (not via API)
-- Win32 platform: use `rm` not `del` in bash tool
-- **Local dev uses Typesense** — run `docker compose up typesense -d` and set `TYPESENSE_HOST=localhost`, `TYPESENSE_PORT=8118` in `.env`
-- Old top-level `ports/`, `adapters/`, `container.py` were DELETED
-- `config/database.py` was DELETED — absorbed into adapters + container
-- `config/chromaDb.py` was DELETED (V2.3) — replaced by Typesense
-- **Windows: set PYTHONPATH before Streamlit** — `$env:PYTHONPATH=\".\"`
-- **Windows: WPPConnect can't build** — use partial stack or run bot with Python
-- **Bot Tester** (`streamlit_apps/bot_tester.py`) — test bot logic without WPPConnect
+- Win32 platform locally: use `rm` not `del` in bash tool
+- WPPConnect `/chat/{id}` returns 404 on v2.8.11 — use `/all-chats` with cache
+- TYPESENSE_PORT: 8108 inside Docker, 8118 from host
+- Local dev: `docker compose up typesense -d`, set `TYPESENSE_HOST=localhost`, `TYPESENSE_PORT=8118`
 
 ## Documentation Index
 - **`docs/SYSTEM_OVERVIEW.md`** — Complete current-state overview (START HERE)
 - **`docs/MEMORY.md`** — This file, quick reference for AI agents
-- **`docs/REFACTORING_V2.1-V2.4`** — Historical changelogs per version
-- **`docs/COMPLETE_SYSTEM_SPECIFICATION*.md`** — ⚠️ OUTDATED (still references ChromaDB)
-
+- **`docs/REFACTORING_V3.0_RELEASE.md`** — v3.0 changelog (current)
+- **`docs/REFACTORING_V2.1-V2.5`** — Historical changelogs
