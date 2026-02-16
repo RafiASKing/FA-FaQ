@@ -1,167 +1,155 @@
-# FA-FaQ — Fast Cognitive Search System
+# FA-FaQ — Hospital EMR FAQ System (v3.1 Docs)
 
-AI-powered knowledge base for hospital SOPs and FAQs. Uses **semantic vector search** (ChromaDB + Google Gemini) with multi-channel delivery: Web UI, Streamlit apps, and WhatsApp bot.
+FA-FaQ adalah sistem semantic FAQ untuk lingkungan EMR rumah sakit (Siloam) dengan arsitektur **Ports & Adapters**. Saat ini stack utamanya adalah **Typesense + Gemini + FastAPI/Streamlit + WPPConnect**.
 
-Built with **Ports & Adapters** (Hexagonal Architecture) for easy swapping of AI providers, databases, and messaging platforms.
-
----
-
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| **Semantic Search** | HyDE-formatted embeddings via Google Gemini for accurate query matching |
-| **Multi-Channel** | FastAPI Web, Streamlit Apps, WhatsApp Bot (WPPConnect) |
-| **Agent Mode** | LLM-powered reranking with structured output (LangChain) |
-| **Admin Console** | CRUD operations with image upload and preview |
-| **Pluggable Architecture** | Swap embedding, LLM, vector DB, or messaging provider in one file |
+> Status dokumen: **v3.1 (docs refresh)**
+> Referensi teknis utama: `docs/SYSTEM_OVERVIEW.md` dan `docs/MEMORY.md`
 
 ---
 
-## 🏗️ Architecture
+## ✨ Highlights
+
+| Area | Kondisi Terkini |
+|------|------------------|
+| Search Engine | Typesense vector search (`hospital_faq_kb`, 3072-dim) |
+| Search Mode | `immediate`, `agent` (Flash), `agent_pro` (Pro) |
+| Agent Prompt | Full content + tag description + HyDE keywords + context EMR |
+| Security | API key protection untuk `/api/v1/*` via `X-API-Key` |
+| Error Handling | Sanitized HTTP error + internal stack trace logging |
+| Analytics | Unified logging untuk web + whatsapp (`search_log.csv`, `failed_searches.csv`) |
+
+---
+
+## 🏗️ Architecture Ringkas
 
 ```
-FA-FaQ/
-├── app/
-│   ├── Kernel.py              # FastAPI app factory + lifespan
-│   ├── ports/                 # Abstract interfaces (EmbeddingPort, VectorStorePort, etc.)
-│   ├── generative/engine.py   # Gemini adapters (Embedding + Chat)
-│   ├── controllers/           # API route handlers
-│   ├── services/              # Business logic (search, FAQ, bot, agent)
-│   └── schemas/               # Pydantic models
-├── config/
-│   ├── container.py           # Dependency wiring (swap adapters here)
-│   ├── chromaDb.py            # ChromaDB adapter
-│   ├── messaging.py           # WPPConnect adapter
-│   ├── settings.py            # Environment variables
-│   └── routes.py              # Route registration
-├── streamlit_apps/
-│   ├── user_app.py            # User search interface
-│   ├── admin_app.py           # Admin CRUD console
-│   └── bot_tester.py          # Bot logic simulator
-├── main.py                    # Unified entry point
-└── docker-compose.yml         # Full stack deployment
+Presentation: FastAPI (API/Web) + Streamlit (User/Admin/Bot Tester)
+	↓
+App Layer: Controllers → Services → Schemas
+	↓
+Ports: EmbeddingPort, LLMPort, VectorStorePort, MessagingPort
+	↓
+Adapters: Gemini + Typesense + WPPConnect
 ```
+
+Semua adapter bisa ditukar lewat `config/container.py` tanpa ubah business logic.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Local Run (Windows-friendly)
 
-### Prerequisites
-- Python 3.10+
-- Docker & Docker Compose
-- Google Gemini API Key
-
-### 1. Setup Environment
+### 1) Setup Environment
 
 ```bash
 git clone https://github.com/RafiASKing/FA-FaQ.git
 cd FA-FaQ
 
 python -m venv venv
-.\venv\Scripts\activate  # Windows
+.\venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env
-# Edit .env with your GOOGLE_API_KEY
+copy .env.example .env
 ```
 
-### 2. Start ChromaDB
+Isi minimal `.env`:
+- `GOOGLE_API_KEY=...`
+- `APP_API_KEY=...` (recommended untuk protect `/api/v1/*`)
+
+### 2) Start layanan inti (tanpa WPP)
 
 ```bash
-docker compose up chroma-server -d
+docker compose up --build -d typesense faq-web-v2 faq-admin faq-user
 ```
 
-### 3. Run Apps
+> Command note:
+> - Windows / Docker Desktop: `docker compose`
+> - Lightsail (Docker Compose v1): `docker-compose`
+
+### 3) Jalankan bot tester lokal
 
 ```bash
-# API Server
-python main.py api --port 8001
-
-# Web Frontend
-python main.py web
-
-# Streamlit Apps (set PYTHONPATH first on Windows)
 $env:PYTHONPATH="."
-streamlit run streamlit_apps/user_app.py --server.port 8501
-streamlit run streamlit_apps/admin_app.py --server.port 8502
 streamlit run streamlit_apps/bot_tester.py --server.port 8503
 ```
 
-### Access Points
-
-| Service | URL |
-|---------|-----|
-| API Docs | http://localhost:8001/docs |
-| Web Search | http://localhost:8080 |
-| User App | http://localhost:8501 |
-| Admin Console | http://localhost:8502 |
-| Bot Tester | http://localhost:8503 |
-
----
-
-## 🐳 Docker Deployment
+### 4) Optional: Run API/Bot/Web via Python
 
 ```bash
-# Full stack (Linux/Lightsail)
-docker compose up --build -d
-
-# Partial stack (Windows - skip WPPConnect)
-docker compose up --build -d chroma-server faq-web-v2 faq-admin faq-user
+python main.py api --port 8001
+python main.py web --port 8080
+python main.py bot --port 8000
 ```
 
 ---
 
-## 🔌 Swapping Providers
+## 🔐 API Security
 
-The architecture makes it easy to swap external dependencies:
+- Header auth: `X-API-Key`
+- Env utama: `APP_API_KEY`
+- Fallback legacy: `API_KEY`
+- Scope saat ini: seluruh route `/api/v1/*`
 
-| To Change | Steps |
-|-----------|-------|
-| **Embedding Model** | Create adapter in `app/generative/`, update `container.get_embedding()` |
-| **LLM Provider** | Create adapter implementing `LLMPort`, update `container.get_llm()` |
-| **Vector Database** | Create `config/newDb.py`, update `container.get_vector_store()` |
-| **Messaging** | Create adapter implementing `MessagingPort`, update `container.get_messaging()` |
+Jika key kosong, auth dianggap nonaktif (dev mode).
 
 ---
 
-## 🤖 WhatsApp Bot
+## 🌐 Endpoints Lokal
 
-The bot responds to:
-- **Private chats**: Always replies
-- **Groups**: Only when mentioned with `@faq`
+| Service | URL |
+|---------|-----|
+| Typesense Health | http://localhost:8118/health |
+| Web V2 | http://localhost:8080 |
+| User App | http://localhost:8501 |
+| Admin App | http://localhost:8502 |
+| Bot Tester | http://localhost:8503 |
+| API Docs (manual API run) | http://localhost:8001/docs |
 
-Test bot logic locally without WPPConnect using the **Bot Tester** Streamlit app.
+---
+
+## 🩺 Container Health
+
+- `docker-compose.yml` now defines per-service healthchecks on correct internal ports:
+	- bot: `8000/health`
+	- web: `8080/`
+	- user: `8501/`
+	- admin: `8502/`
+- This avoids false `unhealthy` status caused by inherited default healthcheck to port `8000`.
+
+---
+
+## 🧪 Testing Status
+
+Suites mencakup:
+- service logic (`SearchService`, `FaqService`)
+- core config (`GroupConfig`)
+- auth behavior untuk search API
+
+Kondisi terakhir validasi lokal: **29 passed**.
 
 ---
 
 ## 📚 Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [LOCAL_DEV_GUIDE.md](docs/LOCAL_DEV_GUIDE.md) | Detailed local development instructions |
-| [MEMORY.md](docs/MEMORY.md) | Quick reference for project conventions |
-| [REFACTORING_V2.1](docs/REFACTORING_V2.1_PORTS_ADAPTERS.md) | Ports & Adapters architecture details |
-| [REFACTORING_V2.2](docs/REFACTORING_V2.2_WINDOWS_BOT_TESTER.md) | Windows fixes & Bot Tester |
+| Dokumen | Fungsi |
+|---------|--------|
+| [docs/REFACTORING_V3.1_DOCS_UPDATE.md](docs/REFACTORING_V3.1_DOCS_UPDATE.md) | Changelog docs v3.1 (alignment update) |
+| [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md) | Gambaran sistem lengkap v3.1 |
+| [docs/MEMORY.md](docs/MEMORY.md) | Ringkasan cepat untuk coding agents |
+| [docs/REFACTORING_V3.0_RELEASE.md](docs/REFACTORING_V3.0_RELEASE.md) | Changelog rilis v3.0 (production rollout) |
+| [docs/LOCAL_DEV_GUIDE.md](docs/LOCAL_DEV_GUIDE.md) | Panduan local development detail |
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: FastAPI, Uvicorn
-- **Vector DB**: ChromaDB
-- **Embeddings**: Google Gemini (`google-genai`)
-- **LLM**: Google Gemini via LangChain (`langchain-google-genai`)
-- **Frontend**: Streamlit, Jinja2 Templates
-- **Messaging**: WPPConnect (WhatsApp)
-- **Deployment**: Docker Compose, AWS Lightsail
+- Backend: FastAPI, Uvicorn
+- Apps: Streamlit
+- Vector DB: Typesense
+- Embedding: Google Gemini (`google-genai`)
+- LLM: Gemini via LangChain (`langchain-google-genai`)
+- Messaging: WPPConnect
+- Deployment: Docker Compose, AWS Lightsail
 
 ---
 
-## 📄 License
-
-MIT
-
----
-
-Built with ❤️ for hospital knowledge management.
+Built for hospital knowledge retrieval with Siloam-aligned architecture.

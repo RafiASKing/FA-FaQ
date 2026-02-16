@@ -58,6 +58,12 @@ services:
       - ./data:/app/data
       - ./images:/app/images
     command: uvicorn main:bot_app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
   # --- 5. USER APP ---
   faq-user:
     build: .
@@ -78,6 +84,12 @@ services:
       - TYPESENSE_PORT=8108
       - TYPESENSE_API_KEY=xyz
     command: streamlit run streamlit_apps/user_app.py --server.port=8501 --server.address=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
   # --- 6. ADMIN APP ---
   faq-admin:
     build: .
@@ -98,6 +110,12 @@ services:
       - TYPESENSE_PORT=8108
       - TYPESENSE_API_KEY=xyz
     command: streamlit run streamlit_apps/admin_app.py --server.port=8502 --server.address=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
   # --- 7. FRONTEND V2 ---
   faq-web-v2:
     build: .
@@ -119,3 +137,9 @@ services:
       - TYPESENSE_PORT=8108
       - TYPESENSE_API_KEY=xyz
     command: uvicorn main:web_app --host 0.0.0.0 --port 8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

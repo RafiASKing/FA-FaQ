@@ -2,6 +2,7 @@
 Search Controller - Handler untuk search endpoints.
 """
 
+import uuid
 from typing import Optional, List
 from fastapi import APIRouter, Query, Request, HTTPException
 
@@ -9,6 +10,8 @@ from app.schemas import SearchRequest, SearchResponse, SearchResultItem
 from app.services import SearchService
 from config.constants import WEB_TOP_RESULTS
 from config.middleware import limiter
+from core.exceptions import AppError, AuthError, SearchError
+from core.logger import log_error
 
 
 router = APIRouter(prefix="/search", tags=["Search"])
@@ -16,6 +19,23 @@ router = APIRouter(prefix="/search", tags=["Search"])
 
 class SearchController:
     """Controller untuk search operations."""
+
+    @staticmethod
+    def _raise_sanitized_error(exc: Exception, default_ref_prefix: str) -> None:
+        """Log full error and raise sanitized HTTPException."""
+        request_ref = f"{default_ref_prefix}-{uuid.uuid4().hex[:8].upper()}"
+
+        if isinstance(exc, AppError):
+            ref_code = exc.ref_code or request_ref
+            detail = f"{exc.message} (Ref: {ref_code})"
+            log_error(f"SearchController handled AppError ref={ref_code}", exc)
+            raise HTTPException(status_code=exc.status_code, detail=detail)
+
+        log_error(f"SearchController unexpected error ref={request_ref}", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search service unavailable (Ref: {request_ref})"
+        )
 
     @staticmethod
     @router.get("", response_model=SearchResponse)
@@ -54,8 +74,10 @@ class SearchController:
                     ) for r in results
                 ]
             )
+        except (SearchError, AuthError, AppError) as e:
+            SearchController._raise_sanitized_error(e, "ERR-SRCH")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
+            SearchController._raise_sanitized_error(e, "ERR-SRCH")
 
     @staticmethod
     @router.post("", response_model=SearchResponse)
@@ -91,8 +113,10 @@ class SearchController:
                     ) for r in results
                 ]
             )
+        except (SearchError, AuthError, AppError) as e:
+            SearchController._raise_sanitized_error(e, "ERR-SRCH")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
+            SearchController._raise_sanitized_error(e, "ERR-SRCH")
 
     @staticmethod
     @router.get("/tags", response_model=List[str])
@@ -104,5 +128,7 @@ class SearchController:
         """
         try:
             return SearchService.get_unique_tags()
+        except (SearchError, AuthError, AppError) as e:
+            SearchController._raise_sanitized_error(e, "ERR-TAGS")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+            SearchController._raise_sanitized_error(e, "ERR-TAGS")

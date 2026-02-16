@@ -1,7 +1,17 @@
 # System Overview — FA-FaQ (Hospital EMR FAQ System)
 
 > **Single source of truth** for understanding the entire system.
-> **Last Updated**: 2026-02-15 | **Version**: 3.0
+> **Last Updated**: 2026-02-16 | **Version**: 3.1 (Docs Update)
+
+---
+
+## v3.1 (Docs Update Scope)
+
+This update refreshes documentation to match current implementation and pilot setup:
+- API security now documented with `APP_API_KEY` (`X-API-Key` on `/api/v1/*`)
+- Search controller error handling documented as sanitized response + internal traceback logging
+- Unit/integration test status updated (latest local run: 29 passed)
+- Windows-first local run path documented (Typesense + web/admin/user + bot tester)
 
 ---
 
@@ -269,6 +279,8 @@ WA_BASE_URL=http://wppconnect:21465
 WA_SESSION_KEY=your-secret        # must match WPPConnect SECRET_KEY
 WA_SESSION_NAME=mysession
 BOT_IDENTITIES=6281234567890,6289876543210
+APP_API_KEY=your-strong-api-key # optional, protects /api/v1 endpoints
+# API_KEY=your-legacy-key       # optional fallback for backward compatibility
 
 # Optional
 LANGSMITH_TRACING=true
@@ -276,6 +288,14 @@ LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT=FA-FaQ
 CORS_ORIGINS=https://faq-assist.cloud
 ```
+
+### API Hardening (v3.1)
+
+- API key dependency: `app/dependencies/auth.py`
+- Router enforcement: `routes/api/v1.py` (all `/api/v1/*` endpoints)
+- Sanitized search errors: `app/controllers/search_controller.py`
+- Internal error trace logging: `core/logger.py` via `log_error()`
+- Custom exceptions: `core/exceptions.py` (`AppError`, `SearchError`, `AuthError`, `RateLimitError`)
 
 ### Runtime Config (`data/bot_config.json`)
 ```json
@@ -314,6 +334,17 @@ All app containers share `env_file: .env` + docker-compose `environment:` overri
 
 WPPConnect `SECRET_KEY` and bot's `WA_SESSION_KEY` are synced via `${WA_SESSION_KEY}` variable substitution in docker-compose.yml.
 
+### Compose Command Compatibility
+
+- Windows/Docker Desktop commonly uses `docker compose` (v2 plugin)
+- Lightsail/older servers may use `docker-compose` (v1 binary)
+- Use the command available on each host; semantics for this project are equivalent.
+
+### Healthcheck Note (v3.1)
+
+- Healthchecks are defined per service in `docker-compose.yml` using each service's real internal port.
+- This prevents false `unhealthy` statuses for non-bot containers.
+
 ---
 
 ## Deployment
@@ -351,21 +382,27 @@ docker-compose run --rm faq-web-v2 python -m scripts.migrate_chroma_to_typesense
 ## Local Development
 
 ```bash
-# 1. Start Typesense
+# 1. Start Typesense (minimal)
 docker compose up typesense -d
 
-# 2. Set PYTHONPATH (Windows PowerShell)
+# 2. Recommended Windows partial stack (without WPP)
+docker compose up --build -d typesense faq-web-v2 faq-admin faq-user
+
+# 3. Set PYTHONPATH (Windows PowerShell)
 $env:PYTHONPATH = "."
 
-# 3. Run API / Bot / Web
+# 4. Run API / Bot / Web manually (optional)
 python main.py api --port 8001
 python main.py bot --port 8000
 python main.py web --port 8080
 
-# 4. Run Streamlit apps
+# 5. Run Streamlit apps
+streamlit run streamlit_apps/user_app.py --server.port 8501
 streamlit run streamlit_apps/admin_app.py --server.port 8502
 streamlit run streamlit_apps/bot_tester.py --server.port 8503
 ```
+
+> Note: If you already deployed before the healthcheck update, recreate containers with `up -d` so new healthchecks apply.
 
 ---
 
@@ -373,9 +410,10 @@ streamlit run streamlit_apps/bot_tester.py --server.port 8503
 
 | Doc | What It Covers | Status |
 |-----|---------------|--------|
-| **SYSTEM_OVERVIEW.md** (this file) | Complete current state v3.0 | Current |
-| **MEMORY.md** | Quick reference for AI agents | Current |
-| **REFACTORING_V3.0** | v2.5 → v3.0 changes | Current |
+| **REFACTORING_V3.1_DOCS_UPDATE.md** | v3.1 documentation alignment update | Current |
+| **SYSTEM_OVERVIEW.md** (this file) | Complete current state v3.1 | Current |
+| **MEMORY.md** | Quick reference for AI agents (v3.1) | Current |
+| **REFACTORING_V3.0** | v2.5 → v3.0 changes (production rollout) | Current |
 | **REFACTORING_V2.5** | Production Hardening | Historical |
 | **REFACTORING_V2.3** | ChromaDB → Typesense | Historical |
 | **REFACTORING_V2.1** | Ports & Adapters migration | Historical |

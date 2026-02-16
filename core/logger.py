@@ -71,6 +71,21 @@ def log(message: str, flush: bool = True):
     _logger.info(message)
 
 
+def log_error(message: str, exc: Optional[Exception] = None) -> None:
+    """
+    Error logging helper that records stack trace when exception is provided.
+
+    Args:
+        message: Sanitized context message
+        exc: Original exception object (optional)
+    """
+    if exc is not None:
+        _logger.exception(f"{message}: {exc}")
+        return
+
+    _logger.error(message)
+
+
 def log_search(
     query: str,
     score: float,

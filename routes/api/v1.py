@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from app.controllers.search_controller import router as search_router
 from app.controllers.faq_controller import router as faq_router
 from app.controllers.agent_controller import router as agent_router
-from config.middleware import verify_api_key
+from app.dependencies.auth import verify_api_key
 
 
 router = APIRouter(

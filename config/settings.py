@@ -5,7 +5,7 @@ Semua environment variables dikelola di sini.
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from typing import List
 from dotenv import load_dotenv
 
@@ -43,7 +43,10 @@ class Settings(BaseSettings):
     # === SECURITY ===
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")  # comma-separated
     webhook_secret: str = Field(default="", alias="WEBHOOK_SECRET")  # empty = no check
-    api_key: str = Field(default="", alias="API_KEY")  # empty = no auth on API endpoints
+    api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("APP_API_KEY", "API_KEY")
+    )  # empty = no auth on API endpoints
     
     class Config:
         env_file = ".env"

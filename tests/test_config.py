@@ -18,8 +18,8 @@ class TestSettings:
     def test_default_values(self):
         """Pastikan default values tersedia."""
         settings = Settings()
-        assert settings.embedding_model is not None
-        assert settings.collection_name is not None
+        assert settings.typesense_collection is not None
+        assert settings.typesense_host is not None
     
     def test_path_settings_exists(self):
         """Pastikan PathSettings bisa diakses."""
