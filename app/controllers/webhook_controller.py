@@ -167,9 +167,9 @@ class WebhookController:
         
         # Build response header
         if search_mode == "agent_pro":
-            header = f"🧠💎 Relevansi: {score:.0f}%\n"
+            header = f"💎 Relevansi: {score:.0f}%\n"
         elif search_mode == "agent":
-            header = f"🧠 Relevansi: {score:.0f}%\n"
+            header = f" Relevansi: {score:.0f}%\n"
         elif score >= HIGH_RELEVANCE_THRESHOLD:
             header = f"Relevansi: {score:.0f}%\n"
         else:
@@ -233,6 +233,63 @@ class WebhookController:
         
         try:
             body = await request.json()
+
+            # Metadata-only debug log (safe: no raw payload/base64 printed)
+            if isinstance(body, dict):
+                data = body.get("data") if isinstance(body.get("data"), dict) else {}
+
+                body_text = data.get("body") or body.get("body") or ""
+                caption_text = data.get("caption") or body.get("caption") or ""
+                content_text = data.get("content") or body.get("content") or ""
+                mentioned = data.get("mentionedJidList") or body.get("mentionedJidList") or []
+                if not isinstance(mentioned, list):
+                    mentioned = []
+
+                raw_msg_id = data.get("id") or body.get("id") or ""
+                msg_id = str(raw_msg_id)[:24] if raw_msg_id else "-"
+
+                raw_remote = (
+                    data.get("from")
+                    or data.get("chatId")
+                    or body.get("from")
+                    or body.get("chatId")
+                    or ""
+                )
+                remote = str(raw_remote)
+                remote_masked = f"...{remote[-14:]}" if remote else "-"
+
+                body_len = len(str(body_text)) if body_text else 0
+                caption_len = len(str(caption_text)) if caption_text else 0
+                content_len = len(str(content_text)) if content_text else 0
+
+                body_str = str(body_text).strip() if body_text else ""
+                is_base64_jpeg = body_str.startswith("/9j/") and body_len >= 120
+                is_data_image = body_str.lower().startswith("data:image/")
+
+                mime = data.get("mimetype") or data.get("mimeType") or body.get("mimetype") or ""
+                msg_type = data.get("type") or body.get("type") or ""
+
+                data_keys = sorted([k for k in data.keys() if isinstance(k, str)])[:12]
+                client_ip = request.client.host if request.client else "-"
+
+                log(
+                    "🧾 WEBHOOK_DBG "
+                    f"ip={client_ip} "
+                    f"event={body.get('event', '-')} "
+                    f"msg_id={msg_id} "
+                    f"from={remote_masked} "
+                    f"body_len={body_len} "
+                    f"caption_len={caption_len} "
+                    f"content_len={content_len} "
+                    f"mentioned_count={len(mentioned)} "
+                    f"base64_jpeg={is_base64_jpeg} "
+                    f"data_image={is_data_image} "
+                    f"mime={mime or '-'} "
+                    f"type={msg_type or '-'} "
+                    f"data_keys={data_keys}"
+                )
+            else:
+                log(f"🧾 WEBHOOK_DBG payload_type={type(body).__name__}")
             
             # Parse payload
             from app.schemas import WhatsAppWebhookPayload
