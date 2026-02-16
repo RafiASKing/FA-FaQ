@@ -31,7 +31,8 @@ class WebhookController:
         message_body: str,
         is_group: bool,
         mentioned_list: list,
-        group_name: str = ""
+        group_name: str = "",
+        has_image: bool = False,
     ):
         """
         Background task untuk memproses pesan masuk.
@@ -45,6 +46,8 @@ class WebhookController:
         
         if not should_reply:
             return
+
+        search_mode = BotConfig.get_search_mode()
         
         # === GROUP MODULE WHITELIST ===
         allowed_modules = None  # None = all modules (for DM)
@@ -81,15 +84,37 @@ class WebhookController:
         if clean_query:
             clean_query = clean_query[:1000]
 
+        if has_image:
+            if search_mode == "agent_pro":
+                WhatsAppService.send_text(
+                    remote_jid,
+                    "📸 Agent Pro untuk analisis gambar sedang dalam pengembangan. Untuk sekarang, bot akan memproses caption/teks pertanyaan Anda dulu."
+                )
+            elif search_mode == "agent":
+                WhatsAppService.send_text(
+                    remote_jid,
+                    "📸 Agent Flash saat ini belum mendukung analisis gambar. Bot akan memproses caption/teks pertanyaan Anda dulu."
+                )
+            else:
+                WhatsAppService.send_text(
+                    remote_jid,
+                    "📸 Mode Immediate saat ini belum mendukung analisis gambar. Bot akan memproses caption/teks pertanyaan Anda dulu."
+                )
+
         if not clean_query:
-            WhatsAppService.send_text(
-                remote_jid, 
-                f"Halo {sender_name}, silakan ketik pertanyaan Anda."
-            )
+            if has_image or WhatsAppService.is_non_text_payload(message_body):
+                WhatsAppService.send_text(
+                    remote_jid,
+                    f"Halo {sender_name}, gambar terdeteksi. Mohon sertakan caption/teks pertanyaan agar bisa diproses."
+                )
+            else:
+                WhatsAppService.send_text(
+                    remote_jid,
+                    f"Halo {sender_name}, silakan ketik pertanyaan Anda."
+                )
             return
-        
+
         # Send acknowledgment for agent modes (immediate is fast enough, no need)
-        search_mode = BotConfig.get_search_mode()
         if search_mode == "agent_pro":
             WhatsAppService.send_text(remote_jid, "Baik, mohon ditunggu...")
         elif search_mode == "agent":
@@ -169,7 +194,7 @@ class WebhookController:
         if search_mode == "agent_pro":
             header = f"💎 Relevansi: {score:.0f}%\n"
         elif search_mode == "agent":
-            header = f" Relevansi: {score:.0f}%\n"
+            header = f"Relevansi: {score:.0f}%\n"
         elif score >= HIGH_RELEVANCE_THRESHOLD:
             header = f"Relevansi: {score:.0f}%\n"
         else:
@@ -306,6 +331,7 @@ class WebhookController:
             is_group = payload.is_group_message()
             mentioned_list = payload.get_mentioned_list()
             group_name = payload.get_group_name()
+            has_image = payload.has_image_payload()
             
             if not remote_jid:
                 return WebhookResponse(status="ignored", message="No remote JID")
@@ -318,7 +344,8 @@ class WebhookController:
                 message_body,
                 is_group,
                 mentioned_list,
-                group_name
+                group_name,
+                has_image
             )
             
             return WebhookResponse(status="success", message="Message queued")

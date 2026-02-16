@@ -85,6 +85,27 @@ class BotLogicService:
 
         return clean.strip()
 
+    @classmethod
+    def is_non_text_payload(cls, message_body: str) -> bool:
+        """
+        Heuristic deteksi payload non-text (contoh base64 image) di body.
+        Digunakan untuk fallback UX saat user kirim gambar tanpa caption.
+        """
+        if not message_body:
+            return False
+
+        body = str(message_body).strip()
+        if not body:
+            return False
+
+        if body.lower().startswith("data:image/"):
+            return True
+
+        if body.startswith("/9j/") and len(body) >= 120:
+            return True
+
+        return False
+
 
 class WhatsAppService:
     """
@@ -139,6 +160,11 @@ class WhatsAppService:
     def clean_query(cls, message_body: str) -> str:
         """Delegate to BotLogicService."""
         return BotLogicService.clean_query(message_body)
+
+    @classmethod
+    def is_non_text_payload(cls, message_body: str) -> bool:
+        """Delegate to BotLogicService."""
+        return BotLogicService.is_non_text_payload(message_body)
 
 
 # Singleton instances

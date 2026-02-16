@@ -38,12 +38,45 @@ class WhatsAppWebhookPayload(BaseModel):
         """Get message body dari berbagai possible fields."""
         if self.data:
             return (
+                self.data.get("caption") or 
                 self.data.get("body") or 
                 self.data.get("content") or 
-                self.data.get("caption") or 
                 ""
             )
-        return self.body or self.content or self.caption or ""
+        return self.caption or self.body or self.content or ""
+
+    def has_image_payload(self) -> bool:
+        """Check apakah payload mengandung media gambar."""
+        source = self.data if self.data else self.__dict__
+
+        msg_type = str(source.get("type") or "").lower()
+        mime_type = str(
+            source.get("mimetype") or
+            source.get("mimeType") or
+            ""
+        ).lower()
+
+        if msg_type == "image":
+            return True
+
+        if mime_type.startswith("image/"):
+            return True
+
+        body_text = str(
+            source.get("body") or
+            source.get("content") or
+            self.body or
+            self.content or
+            ""
+        ).strip()
+
+        if body_text.lower().startswith("data:image/"):
+            return True
+
+        if body_text.startswith("/9j/") and len(body_text) >= 120:
+            return True
+
+        return False
     
     def get_remote_jid(self) -> Optional[str]:
         """Get remote JID (pengirim)."""
